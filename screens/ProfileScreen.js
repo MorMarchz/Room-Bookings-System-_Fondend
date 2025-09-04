@@ -131,22 +131,10 @@ export default function ProfileScreen() {
 
   // Logout handler
   const handleLogout = async () => {
-    Alert.alert(
-      'ยืนยันการออกจากระบบ',
-      'คุณต้องการออกจากระบบหรือไม่?',
-      [
-        { text: 'ยกเลิก', style: 'cancel' },
-        { 
-          text: 'ออกจากระบบ', 
-          style: 'destructive',
-          onPress: async () => {
-            await AsyncStorage.removeItem('jwt_token');
-            setProfile(null);
-            Alert.alert('สำเร็จ', 'ออกจากระบบแล้ว');
-          }
-        },
-      ]
-    );
+    await AsyncStorage.removeItem('jwt_token');
+    setProfile(null);
+    setLoading(false);
+    Alert.alert('สำเร็จ', 'ออกจากระบบแล้ว');
   };
 
   // แสดง loading ตอนกำลังตรวจสอบ token
@@ -190,14 +178,6 @@ export default function ProfileScreen() {
             <Button title="เข้าสู่ระบบ" onPress={() => setLoginVisible(true)} />
             <Button title="สมัครสมาชิก" onPress={() => setRegisterVisible(true)} />
           </View>
-          {/* Debug button */}
-          <Button 
-            title="Check Token" 
-            onPress={async () => {
-              const token = await AsyncStorage.getItem('jwt_token');
-              Alert.alert('Token', token || 'No token found');
-            }} 
-          />
         </View>
       )}
 
