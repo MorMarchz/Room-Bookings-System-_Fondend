@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Modal, TextInput, Alert, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function RoomsScreen() {
@@ -18,6 +18,11 @@ export default function RoomsScreen() {
   const [endDatetime, setEndDatetime] = useState('');
   const [duration, setDuration] = useState('');
 
+  // success notification state
+  const [successVisible, setSuccessVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [fadeAnim] = useState(new Animated.Value(0));
+
   useEffect(() => {
     fetch('http://localhost:5001/api/rooms')
       .then((res) => res.json())
@@ -27,6 +32,29 @@ export default function RoomsScreen() {
       })
       .catch(() => setLoading(false));
   }, []);
+
+  // ฟังก์ชันแสดง success notification
+  const showSuccessNotification = (message) => {
+    setSuccessMessage(message);
+    setSuccessVisible(true);
+    
+    // Animation fade in
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.delay(2500), // แสดงผล 2.5 วินาที
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSuccessVisible(false);
+    });
+  };
 
   // ฟิลเตอร์ข้อมูล
   const filteredRooms = rooms.filter((room) => {
@@ -63,7 +91,8 @@ export default function RoomsScreen() {
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert('จองห้องสำเร็จ', `ห้อง ${selectedRoom.room_name} ถูกจองเรียบร้อย`);
+        // ใช้ custom notification แทน Alert
+        showSuccessNotification(`จองห้อง ${selectedRoom.room_name} เรียบร้อยแล้ว! ✅`);
         setBookingVisible(false);
         setStartDatetime('');
         setEndDatetime('');
@@ -217,6 +246,13 @@ export default function RoomsScreen() {
         </View>
       </Modal>
 
+      {/* Success Notification */}
+      {successVisible && (
+        <Animated.View style={[styles.successNotification, { opacity: fadeAnim }]}>
+          <Text style={styles.successText}>{successMessage}</Text>
+        </Animated.View>
+      )}
+
       <FlatList
         data={filteredRooms}
         keyExtractor={(item, idx) => item.room_name + idx}
@@ -330,5 +366,31 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 12,
     fontSize: 16,
+  },
+  // Success Notification Styles
+  successNotification: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    right: 16,
+    backgroundColor: '#2ecc71',
+    padding: 16,
+    borderRadius: 12,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    zIndex: 1000,
+    alignItems: 'center',
+  },
+  successText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
