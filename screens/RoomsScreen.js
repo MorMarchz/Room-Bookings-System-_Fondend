@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Modal, TextInput, Alert, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function RoomsScreen() {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false); // เพิ่ม state สำหรับตรวจสอบ login
 
   // filter state
   const [filterVisible, setFilterVisible] = useState(false);
@@ -22,6 +24,25 @@ export default function RoomsScreen() {
   const [successVisible, setSuccessVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
+
+  // ตรวจสอบสถานะการ login
+  const checkLoginStatus = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
+      setIsLoggedIn(!!token);
+      console.log('Login status:', !!token);
+    } catch (error) {
+      console.error('Error checking login status:', error);
+      setIsLoggedIn(false);
+    }
+  };
+
+  // ตรวจสอบสถานะการ login ทุกครั้งที่หน้านี้ได้รับ focus
+  useFocusEffect(
+    React.useCallback(() => {
+      checkLoginStatus();
+    }, [])
+  );
 
   useEffect(() => {
     fetch('http://localhost:5001/api/rooms')
@@ -177,33 +198,73 @@ export default function RoomsScreen() {
     }
   };
 
-  const renderItem = ({ item }) => (
-    <View style={styles.card}>
-      <Image
-        source={{ uri: 'https://cdn-icons-png.flaticon.com/512/1532/1532788.png' }}
-        style={styles.image}
-      />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.title}>{item.room_name} ({item.building})</Text>
-        <Text>ประเภท: {item.type}</Text>
-        <Text>ความจุ: {item.capacity} คน</Text>
-        <Text>สิ่งอำนวยความสะดวก: {item.facilities.join(', ')}</Text>
-        <Text>สถานะ: {item.status === 'available' ? 'ว่าง' : 'ไม่ว่าง'}</Text>
-        <TouchableOpacity
-          style={styles.bookButton}
-          onPress={() => {
-            setSelectedRoom(item);
-            setBookingVisible(true);
-          }}
-          disabled={item.status !== 'available'}
-        >
-          <Text style={{ color: '#fff' }}>
-            {item.status === 'available' ? 'จองห้อง' : 'ไม่สามารถจองได้'}
-          </Text>
-        </TouchableOpacity>
+  const renderItem = ({ item }) => {
+    // ตรวจสอบเงื่อนไขการแสดงปุ่ม
+    const isRoomAvailable = item.status === 'available';
+    const canBook = isLoggedIn && isRoomAvailable;
+    
+    // กำหนดสไตล์ปุ่ม
+    const buttonStyle = [
+      styles.bookButton,
+      !canBook && styles.bookButtonDisabled
+    ];
+    
+    // กำหนดข้อความปุ่ม
+    let buttonText = '';
+    if (!isLoggedIn) {
+      buttonText = 'กรุณาเข้าสู่ระบบ';
+    } else if (!isRoomAvailable) {
+      buttonText = 'ไม่สามารถจองได้';
+    } else {
+      buttonText = 'จองห้อง';
+    }
+
+    return (
+      <View style={styles.card}>
+        <Image
+          source={{ uri: 'https://cdn-icons-png.flaticon.com/512/1532/1532788.png' }}
+          style={styles.image}
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>{item.room_name} ({item.building})</Text>
+          <Text>ประเภท: {item.type}</Text>
+          <Text>ความจุ: {item.capacity} คน</Text>
+          <Text>สิ่งอำนวยความสะดวก: {item.facilities.join(', ')}</Text>
+          <Text>สถานะ: {item.status === 'available' ? 'ว่าง' : 'ไม่ว่าง'}</Text>
+          
+          <TouchableOpacity
+            style={buttonStyle}
+            onPress={() => {
+              if (!isLoggedIn) {
+                Alert.alert(
+                  'กรุณาเข้าสู่ระบบ',
+                  'คุณต้องเข้าสู่ระบบก่อนจองห้อง',
+                  [
+                    {
+                      text: 'ตกลง',
+                      onPress: () => {/* นำไปหน้า login หรือ profile */}
+                    }
+                  ]
+                );
+                return;
+              }
+              
+              setSelectedRoom(item);
+              setBookingVisible(true);
+            }}
+            disabled={!canBook}
+          >
+            <Text style={[
+              styles.bookButtonText,
+              !canBook && styles.bookButtonTextDisabled
+            ]}>
+              {buttonText}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -215,6 +276,16 @@ export default function RoomsScreen() {
 
   return (
     <View style={{ flex: 1, padding: 16 }}>
+      {/* แถบแสดงสถานะการ login */}
+      <View style={[
+        styles.loginStatusBar,
+        isLoggedIn ? styles.loginStatusBarSuccess : styles.loginStatusBarWarning
+      ]}>
+        <Text style={styles.loginStatusText}>
+          {isLoggedIn ? '✅ เข้าสู่ระบบแล้ว - สามารถจองห้องได้' : '⚠️ ยังไม่ได้เข้าสู่ระบบ - กรุณาเข้าสู่ระบบเพื่อจองห้อง'}
+        </Text>
+      </View>
+
       {/* ปุ่ม Filter */}
       <TouchableOpacity style={styles.filterButton} onPress={() => setFilterVisible(true)}>
         <Text style={styles.filterButtonText}>Filter</Text>
@@ -465,6 +536,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     opacity: 1,
   },
+  bookButtonDisabled: {
+    backgroundColor: '#95a5a6', // สีเทา
+    opacity: 0.7,
+  },
+  bookButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  bookButtonTextDisabled: {
+    color: '#ecf0f1', // ข้อความสีเทาอ่อน
+  },
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
@@ -504,6 +586,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  // Login Status Bar Styles
+  loginStatusBar: {
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 15,
+    alignItems: 'center',
+  },
+  loginStatusBarSuccess: {
+    backgroundColor: '#d5f4e6',
+    borderColor: '#27ae60',
+    borderWidth: 1,
+  },
+  loginStatusBarWarning: {
+    backgroundColor: '#fff3cd',
+    borderColor: '#ffc107',
+    borderWidth: 1,
+  },
+  loginStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#333',
   },
   // Success Notification Styles
   successNotification: {
