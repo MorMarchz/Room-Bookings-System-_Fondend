@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, Modal, TextInput, StyleSheet, Alert, Platform } from 'react-native';
+import { View, Text, Button, Modal, TextInput, StyleSheet, Alert, Platform, Animated } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
 
@@ -21,6 +21,14 @@ export default function ProfileScreen() {
 
   // User profile state
   const [profile, setProfile] = useState(null);
+
+  // success notification state
+  const [successVisible, setSuccessVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorVisible, setErrorVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [fadeAnim] = useState(new Animated.Value(0));
+  const [errorFadeAnim] = useState(new Animated.Value(0));
 
   // ดึงข้อมูล profile ตอน component mount และหลัง login
   const fetchProfile = async () => {
@@ -53,10 +61,56 @@ export default function ProfileScreen() {
     fetchProfile();
   }, []);
 
+  // ฟังก์ชันแสดง success notification
+  const showSuccessNotification = (message) => {
+    setSuccessMessage(message);
+    setSuccessVisible(true);
+    
+    // Animation fade in
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.delay(2500), // แสดงผล 2.5 วินาที
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setSuccessVisible(false);
+    });
+  };
+
+  // ฟังก์ชันแสดง error notification
+  const showErrorNotification = (message) => {
+    setErrorMessage(message);
+    setErrorVisible(true);
+    
+    // Animation fade in
+    Animated.sequence([
+      Animated.timing(errorFadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.delay(2500), // แสดงผล 2.5 วินาที
+      Animated.timing(errorFadeAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setErrorVisible(false);
+    });
+  };
+
   // Login handler
   const handleLogin = async () => {
     if (!loginUsername || !loginPassword) {
-      Alert.alert('ผิดพลาด', 'กรุณาใส่ Username และ Password');
+      showErrorNotification('กรุณาใส่ Username และ Password');
       return;
     }
 
@@ -79,20 +133,20 @@ export default function ProfileScreen() {
         // ดึง profile ใหม่
         await fetchProfile();
         
-        Alert.alert('สำเร็จ', 'เข้าสู่ระบบสำเร็จ');
+        showSuccessNotification('เข้าสู่ระบบสำเร็จ ✅');
       } else {
-        Alert.alert('ผิดพลาด', data.message || 'เข้าสู่ระบบไม่สำเร็จ');
+        showErrorNotification(data.message || 'เข้าสู่ระบบไม่สำเร็จ');
       }
     } catch (error) {
       console.error('Login error:', error);
-      Alert.alert('ผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์');
+      showErrorNotification('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์');
     }
   };
 
   // Register handler
   const handleRegister = async () => {
     if (!regUsername || !regPassword || !regFullname || !regEmail) {
-      Alert.alert('ผิดพลาด', 'กรุณาใส่ข้อมูลให้ครบถ้วน');
+      showErrorNotification('กรุณาใส่ข้อมูลให้ครบถ้วน');
       return;
     }
 
@@ -119,13 +173,13 @@ export default function ProfileScreen() {
         setRegRole('student');
         setRegisterVisible(false);
         
-        Alert.alert('สำเร็จ', 'สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ');
+        showSuccessNotification('สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ ✅');
       } else {
-        Alert.alert('ผิดพลาด', data.message || 'สมัครสมาชิกไม่สำเร็จ');
+        showErrorNotification(data.message || 'สมัครสมาชิกไม่สำเร็จ');
       }
     } catch (error) {
       console.error('Register error:', error);
-      Alert.alert('ผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์');
+      showErrorNotification('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์');
     }
   };
 
@@ -134,7 +188,7 @@ export default function ProfileScreen() {
     await AsyncStorage.removeItem('jwt_token');
     setProfile(null);
     setLoading(false);
-    Alert.alert('สำเร็จ', 'ออกจากระบบแล้ว');
+    showSuccessNotification('ออกจากระบบแล้ว ✅');
   };
 
   // แสดง loading ตอนกำลังตรวจสอบ token
@@ -279,6 +333,20 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Success Notification */}
+      {successVisible && (
+        <Animated.View style={[styles.successNotification, { opacity: fadeAnim }]}>
+          <Text style={styles.successText}>{successMessage}</Text>
+        </Animated.View>
+      )}
+
+      {/* Error Notification */}
+      {errorVisible && (
+        <Animated.View style={[styles.errorNotification, { opacity: errorFadeAnim }]}>
+          <Text style={styles.errorText}>{errorMessage}</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -401,5 +469,57 @@ const styles = StyleSheet.create({
       android: { height: 40 },
     }),
     width: '100%',
+  },
+  // Success Notification Styles
+  successNotification: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    right: 16,
+    backgroundColor: '#2ecc71',
+    padding: 16,
+    borderRadius: 12,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    zIndex: 1000,
+    alignItems: 'center',
+  },
+  successText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  // Error Notification Styles
+  errorNotification: {
+    position: 'absolute',
+    top: 50,
+    left: 16,
+    right: 16,
+    backgroundColor: '#e74c3c',
+    padding: 16,
+    borderRadius: 12,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    zIndex: 1000,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });

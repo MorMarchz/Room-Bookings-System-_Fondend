@@ -27,10 +27,15 @@ export default function RoomsScreen() {
     fetch('http://localhost:5001/api/rooms')
       .then((res) => res.json())
       .then((data) => {
+        console.log('Rooms data received:', data); // Debug log
+        console.log('First room structure:', data[0]); // Debug log
         setRooms(data);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((error) => {
+        console.error('Error fetching rooms:', error);
+        setLoading(false);
+      });
   }, []);
 
   // ฟังก์ชันแสดง success notification
@@ -56,6 +61,22 @@ export default function RoomsScreen() {
     });
   };
 
+  // ฟังก์ชันสำหรับเติมเวลาปัจจุบัน
+  const setCurrentDateTime = (type) => {
+    const now = new Date();
+    if (type === 'start') {
+      // กำหนดเวลาปัจจุบัน
+      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      setStartDatetime(formatted);
+    } else {
+      // กำหนดเวลา 2 ชั่วโมงหลังจากนี้
+      now.setHours(now.getHours() + 2);
+      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      setEndDatetime(formatted);
+      setDuration('2');
+    }
+  };
+
   // ฟิลเตอร์ข้อมูล
   const filteredRooms = rooms.filter((room) => {
     let statusOk = statusFilter === 'all' || room.status === statusFilter;
@@ -69,27 +90,74 @@ export default function RoomsScreen() {
       Alert.alert('กรุณากรอกข้อมูลให้ครบ');
       return;
     }
-    const token = await AsyncStorage.getItem('jwt_token');
+
+    // ตรวจสอบ token และ user data
+    const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
+    
+    console.log('AsyncStorage check:');
+    console.log('Token:', token ? 'Found' : 'Not found');
+    console.log('Selected Room:', selectedRoom);
+    
     if (!token) {
       Alert.alert('กรุณาเข้าสู่ระบบก่อนจองห้อง');
       setBookingVisible(false);
       return;
     }
+
+    // ตรวจสอบว่าห้องมี ID หรือไม่
+    if (!selectedRoom || (!selectedRoom._id && !selectedRoom.id)) {
+      Alert.alert('เกิดข้อผิดพลาด', 'ไม่พบข้อมูลห้องที่เลือก กรุณาลองใหม่');
+      return;
+    }
+
     try {
+      // แปลงวันที่ให้เป็นรูปแบบ ISO string
+      const startDate = new Date(startDatetime);
+      const endDate = new Date(endDatetime);
+      
+      // ตรวจสอบความถูกต้องของวันที่
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        Alert.alert('รูปแบบวันที่ไม่ถูกต้อง', 'กรุณากรอกวันที่ในรูปแบบ YYYY-MM-DD HH:MM');
+        return;
+      }
+
+      if (startDate >= endDate) {
+        Alert.alert('วันที่ไม่ถูกต้อง', 'เวลาเริ่มต้องน้อยกว่าเวลาสิ้นสุด');
+        return;
+      }
+
+      // คำนวณระยะเวลาจริง
+      const actualDuration = Math.ceil((endDate - startDate) / (1000 * 60 * 60));
+      
+      // เตรียมข้อมูลที่จะส่ง (ตาม Backend schema)
+      const bookingData = {
+        start_datetime: startDate.toISOString(),
+        end_datetime: endDate.toISOString(),
+        duration_hours: Number(duration) || actualDuration,
+        status: 'pending',
+        room_id: selectedRoom._id || selectedRoom.id, // Backend ต้องการ room_id ไม่ใช่ room_name
+      };
+
+      // ไม่ต้องส่ง user_id, fullname, room_name เพราะ Backend จะดึงเองจาก token และ room_id
+
+      console.log('Sending booking data:', bookingData); // Debug log
+      console.log('Token:', token ? 'Present' : 'Missing'); // Debug log
+      console.log('Room ID:', selectedRoom._id || selectedRoom.id); // Debug log
+      console.log('Room Name:', selectedRoom.room_name); // Debug log
+
       const res = await fetch('http://localhost:5001/api/bookings', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          start_datetime: startDatetime,
-          end_datetime: endDatetime,
-          duration_hours: Number(duration),
-          room_name: selectedRoom.room_name,
-        }),
+        body: JSON.stringify(bookingData),
       });
+      
       const data = await res.json();
+      console.log('Response Status:', res.status); // Debug log
+      console.log('Response Data:', data); // Debug log
+      
       if (res.ok) {
         // ใช้ custom notification แทน Alert
         showSuccessNotification(`จองห้อง ${selectedRoom.room_name} เรียบร้อยแล้ว! ✅`);
@@ -98,10 +166,14 @@ export default function RoomsScreen() {
         setEndDatetime('');
         setDuration('');
       } else {
-        Alert.alert('จองห้องไม่สำเร็จ', data.error || 'เกิดข้อผิดพลาด');
+        // แสดงข้อผิดพลาดแบบละเอียด
+        const errorMessage = data.message || data.error || `HTTP ${res.status}: ${res.statusText}`;
+        Alert.alert('จองห้องไม่สำเร็จ', errorMessage);
+        console.error('Booking error:', data);
       }
     } catch (e) {
-      Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์');
+      console.error('Network error:', e);
+      Alert.alert('เกิดข้อผิดพลาด', `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์: ${e.message}`);
     }
   };
 
@@ -212,32 +284,66 @@ export default function RoomsScreen() {
         <View style={styles.modalBg}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>จองห้อง {selectedRoom?.room_name}</Text>
+            
+            <View style={styles.dateTimeSection}>
+              <Text style={styles.inputLabel}>วันที่และเวลาเริ่ม</Text>
+              <View style={styles.dateTimeRow}>
+                <TextInput
+                  style={[styles.input, { flex: 1, marginRight: 8 }]}
+                  placeholder="2024-09-10 14:00"
+                  value={startDatetime}
+                  onChangeText={setStartDatetime}
+                />
+                <TouchableOpacity 
+                  style={styles.quickFillButton} 
+                  onPress={() => setCurrentDateTime('start')}
+                >
+                  <Text style={styles.quickFillText}>ตอนนี้</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.helpText}>รูปแบบ: YYYY-MM-DD HH:MM</Text>
+            </View>
+            
+            <View style={styles.dateTimeSection}>
+              <Text style={styles.inputLabel}>วันที่และเวลาสิ้นสุด</Text>
+              <View style={styles.dateTimeRow}>
+                <TextInput
+                  style={[styles.input, { flex: 1, marginRight: 8 }]}
+                  placeholder="2024-09-10 17:00"
+                  value={endDatetime}
+                  onChangeText={setEndDatetime}
+                />
+                <TouchableOpacity 
+                  style={styles.quickFillButton} 
+                  onPress={() => setCurrentDateTime('end')}
+                >
+                  <Text style={styles.quickFillText}>+2ชม</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.helpText}>รูปแบบ: YYYY-MM-DD HH:MM</Text>
+            </View>
+            
+            <Text style={styles.inputLabel}>ระยะเวลา (ชั่วโมง)</Text>
             <TextInput
               style={styles.input}
-              placeholder="เวลาเริ่ม (YYYY-MM-DDTHH:mm:ss+07:00)"
-              value={startDatetime}
-              onChangeText={setStartDatetime}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="เวลาสิ้นสุด (YYYY-MM-DDTHH:mm:ss+07:00)"
-              value={endDatetime}
-              onChangeText={setEndDatetime}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="ระยะเวลา (ชั่วโมง)"
+              placeholder="3"
               value={duration}
               onChangeText={setDuration}
               keyboardType="numeric"
             />
+            
             <View style={styles.row}>
               <TouchableOpacity style={styles.filterApply} onPress={handleBookRoom}>
                 <Text style={{ color: '#fff' }}>ยืนยันจอง</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.filterOption, { flex: 1, alignItems: 'center' }]}
-                onPress={() => setBookingVisible(false)}
+                onPress={() => {
+                  setBookingVisible(false);
+                  setStartDatetime('');
+                  setEndDatetime('');
+                  setDuration('');
+                }}
               >
                 <Text>ยกเลิก</Text>
               </TouchableOpacity>
@@ -364,8 +470,40 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 10,
     padding: 12,
-    marginBottom: 12,
+    marginBottom: 8,
     fontSize: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 5,
+    marginTop: 10,
+  },
+  helpText: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 10,
+    fontStyle: 'italic',
+  },
+  dateTimeSection: {
+    marginBottom: 5,
+  },
+  dateTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  quickFillButton: {
+    backgroundColor: '#f39c12',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  quickFillText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   // Success Notification Styles
   successNotification: {
