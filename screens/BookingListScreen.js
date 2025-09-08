@@ -19,6 +19,7 @@ export default function BookingListScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userToken, setUserToken] = useState(null);
+  const [userRole, setUserRole] = useState(null); // เพิ่ม state สำหรับ role
 
   // Edit modal states
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -107,14 +108,20 @@ export default function BookingListScreen({ navigation }) {
         return;
       }
 
-      // หากไม่มี userId ให้ดึงจาก token
-      if (!userId && token) {
+
+      // หากไม่มี userId ให้ดึงจาก token และดึง role
+      if (token) {
         const decodedToken = decodeJWT(token);
-        if (decodedToken && decodedToken.id) {
-          userId = decodedToken.id;
-          // เก็บ userId ไว้ใน AsyncStorage สำหรับครั้งต่อไป
-          await AsyncStorage.setItem('userId', userId);
-          console.log('Extracted User ID from token:', userId);
+        if (decodedToken) {
+          if (decodedToken.id && !userId) {
+            userId = decodedToken.id;
+            await AsyncStorage.setItem('userId', userId);
+            console.log('Extracted User ID from token:', userId);
+          }
+          if (decodedToken.role) {
+            setUserRole(decodedToken.role);
+            console.log('User role:', decodedToken.role);
+          }
         }
       }
 
@@ -130,7 +137,7 @@ export default function BookingListScreen({ navigation }) {
       }
       
       setUserToken(token);
-      fetchBookings();
+      // fetchBookings จะถูกเรียกโดย useEffect เมื่อ userRole และ userToken พร้อม
     } catch (error) {
       console.error('Error checking authentication:', error);
       // ⚠️ สำคัญ: Clear ข้อมูล bookings เมื่อเกิดข้อผิดพลาด
@@ -139,9 +146,27 @@ export default function BookingListScreen({ navigation }) {
     }
   };
 
+  // เรียก fetchBookings เมื่อ userRole และ userToken พร้อม
+  useEffect(() => {
+    console.log('=== useEffect triggered ===');
+    console.log('userToken:', userToken ? 'Present' : 'Missing');
+    console.log('userRole:', userRole);
+    
+    if (userToken && userRole) {
+      console.log('Calling fetchBookings with role:', userRole);
+      fetchBookings();
+    } else {
+      console.log('Waiting for userToken and userRole to be ready...');
+    }
+  }, [userToken, userRole]);
+
   const fetchBookings = async () => {
     try {
       setLoading(true);
+      console.log('=== Fetching Bookings START ===');
+      console.log('Current userRole:', userRole);
+      console.log('Role check: userRole !== "admin":', userRole !== 'admin');
+      
       const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
       let userId = await AsyncStorage.getItem('userId') || await AsyncStorage.getItem('user_id');
 
@@ -210,16 +235,19 @@ export default function BookingListScreen({ navigation }) {
       console.log('Raw API Data:', data);
       console.log('Data length:', data.length);
       
-      // กรองเฉพาะการจองของผู้ใช้คนนี้เท่านั้น
-      const userBookings = data.filter(booking => {
-        console.log('Comparing booking.user_id:', booking.user_id, 'with userId:', userId);
-        return booking.user_id === userId || booking.user_id?.toString() === userId?.toString();
-      });
-      
-      console.log('Filtered User Bookings:', userBookings);
-      console.log('User Bookings length:', userBookings.length);
-      
-      setBookings(userBookings);
+      // ถ้า admin ให้เห็นทุก booking, ถ้าไม่ใช่ admin ให้เห็นเฉพาะของตัวเอง
+      let bookingsToShow = data;
+      if (userRole !== 'admin') {
+        bookingsToShow = data.filter(booking => {
+          console.log('Comparing booking.user_id:', booking.user_id, 'with userId:', userId);
+          return booking.user_id === userId || booking.user_id?.toString() === userId?.toString();
+        });
+        console.log('Filtered User Bookings:', bookingsToShow);
+        console.log('User Bookings length:', bookingsToShow.length);
+      } else {
+        console.log('Admin: Show all bookings', bookingsToShow.length);
+      }
+      setBookings(bookingsToShow);
       
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -474,12 +502,16 @@ export default function BookingListScreen({ navigation }) {
 
   const getStatusColor = (status) => {
     switch (status) {
+      case 'approved':
+        return '#28a745'; // สีเขียว
       case 'confirmed':
         return '#4CAF50';
       case 'pending':
         return '#FF9800';
       case 'cancelled':
         return '#F44336';
+      case 'rejected':
+        return '#dc3545'; // สีแดง
       default:
         return '#757575';
     }
@@ -487,12 +519,16 @@ export default function BookingListScreen({ navigation }) {
 
   const getStatusText = (status) => {
     switch (status) {
+      case 'approved':
+        return 'อนุมัติแล้ว';
       case 'confirmed':
         return 'ยืนยันแล้ว';
       case 'pending':
         return 'รอยืนยัน';
       case 'cancelled':
         return 'ยกเลิกแล้ว';
+      case 'rejected':
+        return 'ปฏิเสธ';
       default:
         return status;
     }
@@ -501,7 +537,6 @@ export default function BookingListScreen({ navigation }) {
   const renderBookingItem = ({ item }) => {
     // ตรวจสอบว่าสามารถแก้ไขได้หรือไม่ (เฉพาะสถานะ pending หรือ confirmed)
     const canEdit = item.status === 'pending' || item.status === 'confirmed';
-    
     return (
       <View style={styles.bookingCard}>
         <View style={styles.cardHeader}>
@@ -510,29 +545,24 @@ export default function BookingListScreen({ navigation }) {
             <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
           </View>
         </View>
-        
         <View style={styles.cardContent}>
           <Text style={styles.fullName}>ผู้จอง: {item.fullname || 'ไม่ระบุ'}</Text>
-          
           <View style={styles.dateTimeContainer}>
             <Text style={styles.label}>เริ่ม:</Text>
             <Text style={styles.dateTime}>
               {formatDateTime(item.start_datetime?.$date || item.start_datetime)}
             </Text>
           </View>
-          
           <View style={styles.dateTimeContainer}>
             <Text style={styles.label}>สิ้นสุด:</Text>
             <Text style={styles.dateTime}>
               {formatDateTime(item.end_datetime?.$date || item.end_datetime)}
             </Text>
           </View>
-          
           <View style={styles.durationContainer}>
             <Text style={styles.label}>ระยะเวลา:</Text>
             <Text style={styles.duration}>{item.duration_hours} ชั่วโมง</Text>
           </View>
-          
           {item.created_at && (
             <View style={styles.createdAtContainer}>
               <Text style={styles.createdAtLabel}>จองเมื่อ:</Text>
@@ -541,35 +571,190 @@ export default function BookingListScreen({ navigation }) {
               </Text>
             </View>
           )}
-          
           {/* ปุ่มแก้ไขและลบ */}
           {canEdit && userToken && (
             <View style={styles.actionButtonsContainer}>
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => openEditModal(item)}
-                disabled={deleting === (item._id || item.id)}
-              >
-                <Text style={styles.editButtonText}>✏️ แก้ไขเวลา</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.deleteButtonInList,
-                  deleting === (item._id || item.id) && styles.buttonDisabled
-                ]}
-                onPress={() => deleteBooking(item)}
-                disabled={deleting === (item._id || item.id)}
-              >
-                <Text style={styles.deleteButtonInListText}>
-                  {deleting === (item._id || item.id) ? '🔄 กำลังลบ...' : '🗑️ ลบการจอง'}
-                </Text>
-              </TouchableOpacity>
+              {/* แถวที่ 1: ปุ่มแก้ไข และ ลบ (ของ user) */}
+              <View style={styles.userActionsRow}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => openEditModal(item)}
+                  disabled={deleting === (item._id || item.id)}
+                >
+                  <Text style={styles.editButtonText}>✏️ แก้ไขเวลา</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.deleteButtonInList,
+                    deleting === (item._id || item.id) && styles.buttonDisabled
+                  ]}
+                  onPress={() => deleteBooking(item)}
+                  disabled={deleting === (item._id || item.id)}
+                >
+                  <Text style={styles.deleteButtonInListText}>
+                    {deleting === (item._id || item.id) ? '🔄 กำลังลบ...' : '🗑️ ลบการจอง'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          
+          {/* ปุ่ม admin - แสดงได้ทุก status */}
+          {userRole === 'admin' && userToken && (
+            <View style={styles.actionButtonsContainer}>
+              <View style={styles.adminActionsRow}>
+                {/* ปุ่มอนุมัติสำหรับ admin */}
+                {item.status === 'pending' && (
+                  <TouchableOpacity
+                    style={styles.approveButton}
+                    onPress={() => approveBooking(item)}
+                    disabled={item.approving}
+                  >
+                    <Text style={styles.approveButtonText}>{item.approving ? '⏳ กำลังอนุมัติ...' : '✅ อนุมัติ'}</Text>
+                  </TouchableOpacity>
+                )}
+                {/* ปุ่มลบ (Admin) สำหรับ admin - ลบ booking ของใครก็ได้ */}
+                <TouchableOpacity
+                  style={[
+                    styles.adminDeleteButton,
+                    item.adminDeleting && styles.buttonDisabled
+                  ]}
+                  onPress={() => adminDeleteBooking(item)}
+                  disabled={item.adminDeleting}
+                >
+                  <Text style={styles.adminDeleteButtonText}>
+                    {item.adminDeleting ? '🔄 กำลังลบ...' : '🗑️ ลบ (Admin)'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
       </View>
     );
+  };
+
+  // ===== ฟังก์ชันอนุมัติการจอง (admin) =====
+  const approveBooking = async (booking) => {
+    try {
+      const bookingId = booking._id || booking.id;
+      setBookings(prev => prev.map(b => (b._id === bookingId ? { ...b, approving: true } : b)));
+      
+      const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
+      if (!token) {
+        showNotification('กรุณาเข้าสู่ระบบใหม่', 'warning');
+        return;
+      }
+      
+      const apiUrl = `http://localhost:5001/api/admin_update/${bookingId}`;
+      const requestBody = { 
+        status: 'approved',
+        type: 'booking' // แก้เป็น 'booking' ตาม requirement ของ backend
+      };
+      
+      console.log('=== APPROVE BOOKING DEBUG ===');
+      console.log('Booking to approve:', booking);
+      console.log('Booking ID:', bookingId);
+      console.log('API URL:', apiUrl);
+      console.log('Request Body:', requestBody);
+      console.log('Token present:', !!token);
+      console.log('User role:', userRole);
+      
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      console.log('Response Status:', response.status);
+      console.log('Response OK:', response.ok);
+      
+      let result;
+      try {
+        result = await response.json();
+        console.log('Response JSON:', result);
+      } catch (jsonError) {
+        console.log('Failed to parse JSON response:', jsonError);
+        const responseText = await response.text();
+        console.log('Response Text:', responseText);
+        result = { error: 'Invalid response format' };
+      }
+      
+      if (response.ok) {
+        showNotification('อนุมัติการจองสำเร็จ', 'success');
+        fetchBookings();
+      } else {
+        const errorMessage = result.message || result.error || `HTTP ${response.status}: ${response.statusText}`;
+        console.log('Error message:', errorMessage);
+        showNotification(`อนุมัติไม่สำเร็จ: ${errorMessage}`, 'error');
+      }
+    } catch (error) {
+      showNotification('เกิดข้อผิดพลาดในการอนุมัติ', 'error');
+    } finally {
+      setBookings(prev => prev.map(b => ({ ...b, approving: false })));
+    }
+  };
+
+  // ===== ฟังก์ชันลบ booking สำหรับ admin =====
+  const adminDeleteBooking = async (booking) => {
+    try {
+      const bookingId = booking._id || booking.id;
+      setBookings(prev => prev.map(b => (b._id === bookingId ? { ...b, adminDeleting: true } : b)));
+      
+      const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
+      if (!token) {
+        showNotification('กรุณาเข้าสู่ระบบใหม่', 'warning');
+        return;
+      }
+      
+      const apiUrl = `http://localhost:5001/api/admin/booking/${bookingId}`;
+      
+      console.log('=== ADMIN DELETE BOOKING DEBUG ===');
+      console.log('Booking to delete:', booking);
+      console.log('Booking ID:', bookingId);
+      console.log('API URL:', apiUrl);
+      console.log('Token present:', !!token);
+      console.log('User role:', userRole);
+      
+      const response = await fetch(apiUrl, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      console.log('Response Status:', response.status);
+      console.log('Response OK:', response.ok);
+      
+      let result;
+      try {
+        result = await response.json();
+        console.log('Response JSON:', result);
+      } catch (jsonError) {
+        console.log('Failed to parse JSON response:', jsonError);
+        const responseText = await response.text();
+        console.log('Response Text:', responseText);
+        result = { error: 'Invalid response format' };
+      }
+      
+      if (response.ok) {
+        showNotification('ลบการจองสำเร็จ (Admin)', 'success');
+        fetchBookings();
+      } else {
+        const errorMessage = result.message || result.error || `HTTP ${response.status}: ${response.statusText}`;
+        console.log('Error message:', errorMessage);
+        showNotification(`ลบไม่สำเร็จ: ${errorMessage}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error admin deleting booking:', error);
+      showNotification('เกิดข้อผิดพลาดในการลบ', 'error');
+    } finally {
+      setBookings(prev => prev.map(b => ({ ...b, adminDeleting: false })));
+    }
   };
 
   if (loading && !refreshing) {
@@ -919,12 +1104,20 @@ const styles = StyleSheet.create({
   },
   // Action buttons styles
   actionButtonsContainer: {
-    flexDirection: 'row',
     marginTop: 15,
     paddingTop: 15,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
+  },
+  userActionsRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  adminActionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   editButton: {
     backgroundColor: '#3498db',
@@ -1169,6 +1362,40 @@ const styles = StyleSheet.create({
   deleteButtonModalText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  approveButton: {
+    backgroundColor: '#27ae60',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 8,
+    flex: 1,
+    marginLeft: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  approveButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  adminDeleteButton: {
+    backgroundColor: '#dc3545', // สีแดงเข้มกว่าปุ่มลบปกติ
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 8,
+    flex: 1,
+    marginLeft: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  adminDeleteButtonText: {
+    color: '#fff',
+    fontSize: 13,
     fontWeight: 'bold',
     textAlign: 'center',
   },
