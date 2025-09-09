@@ -45,11 +45,11 @@ export default function RoomsScreen() {
   );
 
   useEffect(() => {
+    // ใช้ข้อมูลจาก Backend API
     fetch('http://localhost:5001/api/rooms')
       .then((res) => res.json())
       .then((data) => {
-        console.log('Rooms data received:', data); // Debug log
-        console.log('First room structure:', data[0]); // Debug log
+        console.log('Rooms data received:', data);
         setRooms(data);
         setLoading(false);
       })
@@ -57,6 +57,74 @@ export default function RoomsScreen() {
         console.error('Error fetching rooms:', error);
         setLoading(false);
       });
+
+    // ข้อมูลห้องจำลอง - แต่ละห้องจะมีรูปภาพไม่เหมือนกัน (สำหรับ fallback)
+    /*
+    const mockRoomsData = [
+      {
+        "id": "1",
+        "room_name": "4311",
+        "building": "ตึก 4",
+        "capacity": 50,
+        "type": "lab",
+        "facilities": [
+          "projector",
+          "whiteboard",
+          "aircon"
+        ],
+        "status": "available",
+        "image": "https://images.unsplash.com/photo-1562774053-701939374585?w=800&h=600&fit=crop&crop=center" // Computer Lab
+      },
+      {
+        "id": "2",
+        "room_name": "7203",
+        "building": "ตึก 7",
+        "capacity": 30,
+        "type": "classroom",
+        "facilities": [
+          "projector",
+          "whiteboard",
+          "aircon"
+        ],
+        "status": "available",
+        "image": "https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=800&h=600&fit=crop&crop=center" // Classroom
+      },
+      {
+        "id": "3",
+        "room_name": "4205",
+        "building": "ตึก 4",
+        "capacity": 20,
+        "type": "meeting",
+        "facilities": [
+          "projector",
+          "aircon"
+        ],
+        "status": "available",
+        "image": "https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&h=600&fit=crop&crop=center" // Meeting Room
+      },
+      {
+        "id": "4",
+        "room_name": "3305",
+        "building": "ตึก 3",
+        "capacity": 35,
+        "type": "lab",
+        "facilities": [
+          "projector",
+          "whiteboard",
+          "aircon"
+        ],
+        "status": "available",
+        "image": "https://images.unsplash.com/photo-1581092160562-40aa08e78837?w=800&h=600&fit=crop&crop=center" // Science Lab
+      }
+    ];
+
+    // จำลองการ delay ของ API call
+    setTimeout(() => {
+      console.log('Rooms data loaded:', mockRoomsData);
+      setRooms(mockRoomsData);
+      setLoading(false);
+    }, 500);
+    */
   }, []);
 
   // ฟังก์ชันแสดง success notification
@@ -101,7 +169,7 @@ export default function RoomsScreen() {
   // ฟิลเตอร์ข้อมูล
   const filteredRooms = rooms.filter((room) => {
     let statusOk = statusFilter === 'all' || room.status === statusFilter;
-    let typeOk = typeFilter === 'all' || room.type === typeFilter;
+    let typeOk = typeFilter === 'all' || room.type?.toLowerCase() === typeFilter.toLowerCase();
     return statusOk && typeOk;
   });
 
@@ -115,10 +183,6 @@ export default function RoomsScreen() {
     // ตรวจสอบ token และ user data
     const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
     
-    console.log('AsyncStorage check:');
-    console.log('Token:', token ? 'Found' : 'Not found');
-    console.log('Selected Room:', selectedRoom);
-    
     if (!token) {
       Alert.alert('กรุณาเข้าสู่ระบบก่อนจองห้อง');
       setBookingVisible(false);
@@ -129,6 +193,16 @@ export default function RoomsScreen() {
     if (!selectedRoom || (!selectedRoom._id && !selectedRoom.id)) {
       Alert.alert('เกิดข้อผิดพลาด', 'ไม่พบข้อมูลห้องที่เลือก กรุณาลองใหม่');
       return;
+    }
+
+    // จัดการ MongoDB ObjectId
+    let roomId;
+    if (selectedRoom._id) {
+      // กรณีที่ _id เป็น object ของ MongoDB
+      roomId = selectedRoom._id.$oid || selectedRoom._id;
+    } else {
+      // กรณีที่ใช้ id ธรรมดา
+      roomId = selectedRoom.id;
     }
 
     try {
@@ -156,15 +230,10 @@ export default function RoomsScreen() {
         end_datetime: endDate.toISOString(),
         duration_hours: Number(duration) || actualDuration,
         status: 'pending',
-        room_id: selectedRoom._id || selectedRoom.id, // Backend ต้องการ room_id ไม่ใช่ room_name
+        room_id: roomId, // ใช้ roomId ที่จัดการแล้ว
       };
 
       // ไม่ต้องส่ง user_id, fullname, room_name เพราะ Backend จะดึงเองจาก token และ room_id
-
-      console.log('Sending booking data:', bookingData); // Debug log
-      console.log('Token:', token ? 'Present' : 'Missing'); // Debug log
-      console.log('Room ID:', selectedRoom._id || selectedRoom.id); // Debug log
-      console.log('Room Name:', selectedRoom.room_name); // Debug log
 
       const res = await fetch('http://localhost:5001/api/bookings', {
         method: 'POST',
@@ -176,8 +245,6 @@ export default function RoomsScreen() {
       });
       
       const data = await res.json();
-      console.log('Response Status:', res.status); // Debug log
-      console.log('Response Data:', data); // Debug log
       
       if (res.ok) {
         // ใช้ custom notification แทน Alert
@@ -190,10 +257,8 @@ export default function RoomsScreen() {
         // แสดงข้อผิดพลาดแบบละเอียด
         const errorMessage = data.message || data.error || `HTTP ${res.status}: ${res.statusText}`;
         Alert.alert('จองห้องไม่สำเร็จ', errorMessage);
-        console.error('Booking error:', data);
       }
     } catch (e) {
-      console.error('Network error:', e);
       Alert.alert('เกิดข้อผิดพลาด', `ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์: ${e.message}`);
     }
   };
@@ -209,6 +274,23 @@ export default function RoomsScreen() {
       !canBook && styles.bookButtonDisabled
     ];
     
+    // กำหนดรูปภาพตามประเภทห้อง
+    const getImageForRoom = (room) => {
+      if (room.image) return room.image;
+      
+      // กำหนดรูปภาพเริ่มต้นตามประเภท
+      switch (room.type?.toLowerCase()) {
+        case 'lab':
+          return 'https://images.unsplash.com/photo-1562774053-701939374585?w=800&h=600&fit=crop&crop=center';
+        case 'classroom':
+          return 'https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=800&h=600&fit=crop&crop=center';
+        case 'meeting':
+          return 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&h=600&fit=crop&crop=center';
+        default:
+          return 'https://cdn-icons-png.flaticon.com/512/1532/1532788.png';
+      }
+    };
+    
     // กำหนดข้อความปุ่ม
     let buttonText = '';
     if (!isLoggedIn) {
@@ -222,7 +304,7 @@ export default function RoomsScreen() {
     return (
       <View style={styles.card}>
         <Image
-          source={{ uri: 'https://cdn-icons-png.flaticon.com/512/1532/1532788.png' }}
+          source={{ uri: getImageForRoom(item) }}
           style={styles.image}
         />
         <View style={{ flex: 1 }}>
@@ -302,19 +384,19 @@ export default function RoomsScreen() {
                 style={[styles.filterOption, statusFilter === 'all' && styles.selected]}
                 onPress={() => setStatusFilter('all')}
               >
-                <Text>ทั้งหมด</Text>
+                <Text style={[statusFilter === 'all' && { color: '#fff', fontWeight: 'bold' }]}>ทั้งหมด</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.filterOption, statusFilter === 'available' && styles.selected]}
                 onPress={() => setStatusFilter('available')}
               >
-                <Text>ว่าง</Text>
+                <Text style={[statusFilter === 'available' && { color: '#fff', fontWeight: 'bold' }]}>ว่าง</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.filterOption, statusFilter === 'unavailable' && styles.selected]}
                 onPress={() => setStatusFilter('unavailable')}
               >
-                <Text>ไม่ว่าง</Text>
+                <Text style={[statusFilter === 'unavailable' && { color: '#fff', fontWeight: 'bold' }]}>ไม่ว่าง</Text>
               </TouchableOpacity>
             </View>
             <Text style={styles.filterLabel}>ประเภทห้อง</Text>
@@ -323,19 +405,27 @@ export default function RoomsScreen() {
                 style={[styles.filterOption, typeFilter === 'all' && styles.selected]}
                 onPress={() => setTypeFilter('all')}
               >
-                <Text>ทั้งหมด</Text>
+                <Text style={[typeFilter === 'all' && { color: '#fff', fontWeight: 'bold' }]}>ทั้งหมด</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.filterOption, typeFilter === 'lab' && styles.selected]}
                 onPress={() => setTypeFilter('lab')}
               >
-                <Text>Lab</Text>
+                <Text style={[typeFilter === 'lab' && { color: '#fff', fontWeight: 'bold' }]}>Lab</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.filterOption, typeFilter === 'classroom' && styles.selected]}
                 onPress={() => setTypeFilter('classroom')}
               >
-                <Text>Classroom</Text>
+                <Text style={[typeFilter === 'classroom' && { color: '#fff', fontWeight: 'bold' }]}>Classroom</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.row}>
+              <TouchableOpacity
+                style={[styles.filterOption, typeFilter === 'meeting' && styles.selected]}
+                onPress={() => setTypeFilter('meeting')}
+              >
+                <Text style={[typeFilter === 'meeting' && { color: '#fff', fontWeight: 'bold' }]}>Meeting</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.row}>
@@ -444,17 +534,24 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     backgroundColor: '#fff',
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 8,
-    elevation: 2,
+    margin: 8,
+    padding: 16,
+    borderRadius: 12,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
     alignItems: 'center',
   },
   image: {
-    width: 64,
-    height: 64,
+    width: 80,
+    height: 80,
     marginRight: 16,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#eee',
   },
   title: {
@@ -504,29 +601,34 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    justifyContent: 'space-around',
+    marginBottom: 15,
+    flexWrap: 'wrap',
   },
   filterOption: {
-    padding: 10,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#bbb',
-    marginHorizontal: 4,
-    backgroundColor: '#f1f2f6',
+    borderColor: '#ddd',
+    marginHorizontal: 6,
+    marginVertical: 4,
+    backgroundColor: '#f8f9fa',
+    minWidth: 80,
+    alignItems: 'center',
   },
   selected: {
     backgroundColor: '#2d98da',
     borderColor: '#2d98da',
-    color: '#fff',
   },
   filterApply: {
-    flex: 1,
-    backgroundColor: '#2d98da',
-    padding: 12,
-    borderRadius: 8,
+    backgroundColor: '#27ae60',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 10,
     alignItems: 'center',
-    marginHorizontal: 4,
+    marginTop: 10,
+    elevation: 2,
   },
   bookButton: {
     marginTop: 10,

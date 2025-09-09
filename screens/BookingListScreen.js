@@ -83,7 +83,6 @@ export default function BookingListScreen({ navigation }) {
 
   // ฟังก์ชัน clear ข้อมูล booking และ reset state
   const clearBookingData = () => {
-    console.log('🗑️ Clearing booking data');
     setBookings([]);
     setUserToken(null);
     setLoading(false);
@@ -95,9 +94,7 @@ export default function BookingListScreen({ navigation }) {
       const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
       let userId = await AsyncStorage.getItem('userId') || await AsyncStorage.getItem('user_id');
       
-      console.log('=== Authentication Check ===');
-      console.log('Token found:', token ? 'Yes' : 'No');
-      console.log('User ID found:', userId ? 'Yes' : 'No');
+
       
       if (!token) {
         // ⚠️ สำคัญ: Clear ข้อมูล bookings เมื่อไม่ได้ login
@@ -116,16 +113,16 @@ export default function BookingListScreen({ navigation }) {
           if (decodedToken.id && !userId) {
             userId = decodedToken.id;
             await AsyncStorage.setItem('userId', userId);
-            console.log('Extracted User ID from token:', userId);
+
           }
           if (decodedToken.role) {
             setUserRole(decodedToken.role);
-            console.log('User role:', decodedToken.role);
+
           }
         }
       }
 
-      console.log('Final User ID:', userId);
+
       
       if (!userId) {
         // ⚠️ สำคัญ: Clear ข้อมูล bookings เมื่อไม่มี userId
@@ -148,33 +145,19 @@ export default function BookingListScreen({ navigation }) {
 
   // เรียก fetchBookings เมื่อ userRole และ userToken พร้อม
   useEffect(() => {
-    console.log('=== useEffect triggered ===');
-    console.log('userToken:', userToken ? 'Present' : 'Missing');
-    console.log('userRole:', userRole);
-    
     if (userToken && userRole) {
-      console.log('Calling fetchBookings with role:', userRole);
       fetchBookings();
-    } else {
-      console.log('Waiting for userToken and userRole to be ready...');
     }
   }, [userToken, userRole]);
 
   const fetchBookings = async () => {
     try {
       setLoading(true);
-      console.log('=== Fetching Bookings START ===');
-      console.log('Current userRole:', userRole);
-      console.log('Role check: userRole !== "admin":', userRole !== 'admin');
       
       const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
       let userId = await AsyncStorage.getItem('userId') || await AsyncStorage.getItem('user_id');
 
-      console.log('=== Fetching Bookings ===');
-      console.log('Token:', token ? 'Present' : 'Missing');
-
       if (!token) {
-        console.log('Missing token, clearing bookings and aborting fetch');
         clearBookingData(); // ⚠️ ใช้ฟังก์ชัน clear แทน
         return;
       }
@@ -185,19 +168,13 @@ export default function BookingListScreen({ navigation }) {
         if (decodedToken && decodedToken.id) {
           userId = decodedToken.id;
           await AsyncStorage.setItem('userId', userId);
-          console.log('Extracted User ID from token in fetch:', userId);
         }
       }
 
-      console.log('User ID for filtering:', userId);
-
       if (!userId) {
-        console.log('Missing userId, clearing bookings and aborting fetch');
         clearBookingData(); // ⚠️ ใช้ฟังก์ชัน clear แทน
         return;
       }
-
-      console.log('Making API call to: http://localhost:5001/api/bookings_list');
       
       const response = await fetch('http://localhost:5001/api/bookings_list', {
         method: 'GET',
@@ -207,11 +184,7 @@ export default function BookingListScreen({ navigation }) {
         },
       });
 
-      console.log('API Response Status:', response.status);
-      console.log('API Response OK:', response.ok);
-
       if (response.status === 401) {
-        console.log('401 Unauthorized - Token expired, clearing data');
         clearBookingData(); // ⚠️ ใช้ฟังก์ชัน clear แทน
         
         showNotification('เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่', 'warning');
@@ -226,26 +199,18 @@ export default function BookingListScreen({ navigation }) {
       }
 
       if (!response.ok) {
-        console.log('API Error - Status:', response.status);
         clearBookingData(); // ⚠️ ใช้ฟังก์ชัน clear แทน
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
-      console.log('Raw API Data:', data);
-      console.log('Data length:', data.length);
       
       // ถ้า admin ให้เห็นทุก booking, ถ้าไม่ใช่ admin ให้เห็นเฉพาะของตัวเอง
       let bookingsToShow = data;
       if (userRole !== 'admin') {
         bookingsToShow = data.filter(booking => {
-          console.log('Comparing booking.user_id:', booking.user_id, 'with userId:', userId);
           return booking.user_id === userId || booking.user_id?.toString() === userId?.toString();
         });
-        console.log('Filtered User Bookings:', bookingsToShow);
-        console.log('User Bookings length:', bookingsToShow.length);
-      } else {
-        console.log('Admin: Show all bookings', bookingsToShow.length);
       }
       setBookings(bookingsToShow);
       
@@ -333,16 +298,9 @@ export default function BookingListScreen({ navigation }) {
         duration_hours: Number(editDuration)
       };
 
-      console.log('=== UPDATE BOOKING DEBUG ===');
-      console.log('Selected booking:', selectedBooking);
-      console.log('Booking ID:', selectedBooking._id || selectedBooking.id);
-      console.log('Update data:', updateData);
-      console.log('Token present:', !!token);
-
       // ใช้ endpoint ที่ Backend รองรับ: /api/bookings_list/update/:id
       const bookingId = selectedBooking._id || selectedBooking.id;
       const apiUrl = `http://localhost:5001/api/bookings_list/update/${bookingId}`;
-      console.log('API URL:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'PUT',
@@ -354,8 +312,6 @@ export default function BookingListScreen({ navigation }) {
       });
 
       const result = await response.json();
-      console.log('API Response Status:', response.status);
-      console.log('API Response Data:', result);
 
       if (response.ok) {
         showNotification('แก้ไขการจองเรียบร้อยแล้ว', 'success');
@@ -395,10 +351,6 @@ export default function BookingListScreen({ navigation }) {
 
   // ฟังก์ชันลบการจอง
   const deleteBooking = async (booking) => {
-    console.log('=== DELETE BOOKING CLICKED ===');
-    console.log('Booking to delete:', booking);
-    console.log('User token exists:', !!userToken);
-    
     // เก็บข้อมูลการจองที่จะลบและแสดง modal
     setBookingToDelete(booking);
     setDeleteModalVisible(true);
@@ -406,34 +358,20 @@ export default function BookingListScreen({ navigation }) {
 
   // ฟังก์ชันยืนยันการลบ
   const confirmDeleteBooking = async (booking) => {
-    console.log('=== CONFIRM DELETE BOOKING START ===');
-    console.log('Booking data:', booking);
-    
     try {
       const bookingId = booking._id || booking.id;
-      console.log('Booking ID extracted:', bookingId);
       
       setDeleting(bookingId); // แสดง loading สำหรับการจองนี้
-      console.log('Set deleting state to:', bookingId);
       
       const token = await AsyncStorage.getItem('userToken') || await AsyncStorage.getItem('jwt_token');
-      console.log('Token retrieved:', token ? 'Present' : 'Missing');
       
       if (!token) {
-        console.log('No token found, showing notification');
         showNotification('กรุณาเข้าสู่ระบบใหม่', 'warning');
         return;
       }
 
       const apiUrl = `http://localhost:5001/api/bookings_list/delete/${bookingId}`;
-      
-      console.log('=== DELETE BOOKING DEBUG ===');
-      console.log('Deleting booking:', booking);
-      console.log('Booking ID:', bookingId);
-      console.log('API URL:', apiUrl);
-      console.log('Token present:', !!token);
 
-      console.log('Making DELETE request...');
       const response = await fetch(apiUrl, {
         method: 'DELETE',
         headers: {
@@ -442,28 +380,17 @@ export default function BookingListScreen({ navigation }) {
         },
       });
 
-      console.log('DELETE response received');
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
       let result;
       try {
         result = await response.json();
-        console.log('Response JSON:', result);
       } catch (jsonError) {
-        console.log('Failed to parse JSON response:', jsonError);
         result = { error: 'Invalid response format' };
       }
 
-      console.log('Delete Response Status:', response.status);
-      console.log('Delete Response Data:', result);
-
       if (response.ok) {
-        console.log('Delete successful!');
         showNotification('ลบการจองเรียบร้อยแล้ว', 'success');
         fetchBookings(); // รีเฟรชข้อมูล
       } else {
-        console.log('Delete failed with status:', response.status);
         if (response.status === 404) {
           showNotification('ไม่พบการจองที่ต้องการลบ', 'error');
         } else if (response.status === 403) {
@@ -477,7 +404,6 @@ export default function BookingListScreen({ navigation }) {
       console.error('Error deleting booking:', error);
       showNotification(`ไม่สามารถลบการจองได้: ${error.message}`, 'error');
     } finally {
-      console.log('Clearing deleting state');
       setDeleting(null); // ซ่อน loading
       setBookingToDelete(null); // ล้างข้อมูลการจองที่เลือก
     }
@@ -652,14 +578,6 @@ export default function BookingListScreen({ navigation }) {
         type: 'booking' // แก้เป็น 'booking' ตาม requirement ของ backend
       };
       
-      console.log('=== APPROVE BOOKING DEBUG ===');
-      console.log('Booking to approve:', booking);
-      console.log('Booking ID:', bookingId);
-      console.log('API URL:', apiUrl);
-      console.log('Request Body:', requestBody);
-      console.log('Token present:', !!token);
-      console.log('User role:', userRole);
-      
       const response = await fetch(apiUrl, {
         method: 'PUT',
         headers: {
@@ -669,17 +587,11 @@ export default function BookingListScreen({ navigation }) {
         body: JSON.stringify(requestBody),
       });
       
-      console.log('Response Status:', response.status);
-      console.log('Response OK:', response.ok);
-      
       let result;
       try {
         result = await response.json();
-        console.log('Response JSON:', result);
       } catch (jsonError) {
-        console.log('Failed to parse JSON response:', jsonError);
         const responseText = await response.text();
-        console.log('Response Text:', responseText);
         result = { error: 'Invalid response format' };
       }
       
@@ -688,7 +600,6 @@ export default function BookingListScreen({ navigation }) {
         fetchBookings();
       } else {
         const errorMessage = result.message || result.error || `HTTP ${response.status}: ${response.statusText}`;
-        console.log('Error message:', errorMessage);
         showNotification(`อนุมัติไม่สำเร็จ: ${errorMessage}`, 'error');
       }
     } catch (error) {
@@ -712,13 +623,6 @@ export default function BookingListScreen({ navigation }) {
       
       const apiUrl = `http://localhost:5001/api/admin/booking/${bookingId}`;
       
-      console.log('=== ADMIN DELETE BOOKING DEBUG ===');
-      console.log('Booking to delete:', booking);
-      console.log('Booking ID:', bookingId);
-      console.log('API URL:', apiUrl);
-      console.log('Token present:', !!token);
-      console.log('User role:', userRole);
-      
       const response = await fetch(apiUrl, {
         method: 'DELETE',
         headers: {
@@ -727,17 +631,11 @@ export default function BookingListScreen({ navigation }) {
         },
       });
       
-      console.log('Response Status:', response.status);
-      console.log('Response OK:', response.ok);
-      
       let result;
       try {
         result = await response.json();
-        console.log('Response JSON:', result);
       } catch (jsonError) {
-        console.log('Failed to parse JSON response:', jsonError);
         const responseText = await response.text();
-        console.log('Response Text:', responseText);
         result = { error: 'Invalid response format' };
       }
       
@@ -746,7 +644,6 @@ export default function BookingListScreen({ navigation }) {
         fetchBookings();
       } else {
         const errorMessage = result.message || result.error || `HTTP ${response.status}: ${response.statusText}`;
-        console.log('Error message:', errorMessage);
         showNotification(`ลบไม่สำเร็จ: ${errorMessage}`, 'error');
       }
     } catch (error) {
@@ -916,7 +813,6 @@ export default function BookingListScreen({ navigation }) {
               <TouchableOpacity
                 style={[styles.modalButton, styles.deleteButtonModal]}
                 onPress={() => {
-                  console.log('Delete confirmed, calling confirmDeleteBooking');
                   confirmDeleteBooking(bookingToDelete);
                   setDeleteModalVisible(false);
                 }}
