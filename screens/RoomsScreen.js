@@ -1,7 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Modal, TextInput, Alert, Animated } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Image, TouchableOpacity, Modal, TextInput, Alert, Animated, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+
+// Import DateTimePicker conditionally (not supported on web)
+let DateTimePicker = null;
+if (Platform.OS !== 'web') {
+  try {
+    DateTimePicker = require('@react-native-community/datetimepicker').default;
+  } catch (e) {
+    console.log('DateTimePicker not available');
+  }
+}
 
 export default function RoomsScreen() {
   const [rooms, setRooms] = useState([]);
@@ -19,6 +29,14 @@ export default function RoomsScreen() {
   const [startDatetime, setStartDatetime] = useState('');
   const [endDatetime, setEndDatetime] = useState('');
   const [duration, setDuration] = useState('');
+
+  // DateTimePicker state
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   // success notification state
   const [successVisible, setSuccessVisible] = useState(false);
@@ -150,19 +168,81 @@ export default function RoomsScreen() {
     });
   };
 
+  // ฟังก์ชันสำหรับแปลง Date เป็น string
+  const formatDateTime = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+  };
+
+  // ฟังก์ชันสำหรับจัดการ DateTimePicker
+  const onStartDateChange = (event, selectedDate) => {
+    setShowStartDatePicker(false);
+    if (selectedDate) {
+      setStartDate(selectedDate);
+      setStartDatetime(formatDateTime(selectedDate));
+    }
+  };
+
+  const onStartTimeChange = (event, selectedTime) => {
+    setShowStartTimePicker(false);
+    if (selectedTime) {
+      const newDateTime = new Date(startDate);
+      newDateTime.setHours(selectedTime.getHours());
+      newDateTime.setMinutes(selectedTime.getMinutes());
+      setStartDate(newDateTime);
+      setStartDatetime(formatDateTime(newDateTime));
+    }
+  };
+
+  const onEndDateChange = (event, selectedDate) => {
+    setShowEndDatePicker(false);
+    if (selectedDate) {
+      setEndDate(selectedDate);
+      setEndDatetime(formatDateTime(selectedDate));
+    }
+  };
+
+  const onEndTimeChange = (event, selectedTime) => {
+    setShowEndTimePicker(false);
+    if (selectedTime) {
+      const newDateTime = new Date(endDate);
+      newDateTime.setHours(selectedTime.getHours());
+      newDateTime.setMinutes(selectedTime.getMinutes());
+      setEndDate(newDateTime);
+      setEndDatetime(formatDateTime(newDateTime));
+    }
+  };
+
   // ฟังก์ชันสำหรับเติมเวลาปัจจุบัน
   const setCurrentDateTime = (type) => {
     const now = new Date();
     if (type === 'start') {
-      // กำหนดเวลาปัจจุบัน
-      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      setStartDatetime(formatted);
+      setStartDate(now);
+      setStartDatetime(formatDateTime(now));
     } else {
       // กำหนดเวลา 2 ชั่วโมงหลังจากนี้
       now.setHours(now.getHours() + 2);
-      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      setEndDatetime(formatted);
+      setEndDate(now);
+      setEndDatetime(formatDateTime(now));
       setDuration('2');
+    }
+  };
+
+  // ฟังก์ชันสำหรับตั้งเวลาล่วงหน้า
+  const setFutureDateTime = (days, type) => {
+    const future = new Date();
+    future.setDate(future.getDate() + days);
+    if (type === 'start') {
+      setStartDate(future);
+      setStartDatetime(formatDateTime(future));
+    } else {
+      future.setHours(future.getHours() + 2);
+      setEndDate(future);
+      setEndDatetime(formatDateTime(future));
     }
   };
 
@@ -448,40 +528,124 @@ export default function RoomsScreen() {
             
             <View style={styles.dateTimeSection}>
               <Text style={styles.inputLabel}>วันที่และเวลาเริ่ม</Text>
-              <View style={styles.dateTimeRow}>
-                <TextInput
-                  style={[styles.input, { flex: 1, marginRight: 8 }]}
-                  placeholder="2024-09-10 14:00"
-                  value={startDatetime}
-                  onChangeText={setStartDatetime}
-                />
-                <TouchableOpacity 
-                  style={styles.quickFillButton} 
-                  onPress={() => setCurrentDateTime('start')}
-                >
-                  <Text style={styles.quickFillText}>ตอนนี้</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.helpText}>รูปแบบ: YYYY-MM-DD HH:MM</Text>
+              {Platform.OS === 'web' ? (
+                // Web fallback - use regular input with helper buttons
+                <>
+                  <View style={styles.dateTimeRow}>
+                    <TextInput
+                      style={[styles.input, { flex: 1, marginRight: 8 }]}
+                      placeholder="2024-09-10 14:00"
+                      value={startDatetime}
+                      onChangeText={setStartDatetime}
+                    />
+                    <TouchableOpacity 
+                      style={styles.quickFillButton} 
+                      onPress={() => setCurrentDateTime('start')}
+                    >
+                      <Text style={styles.quickFillText}>ตอนนี้</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.quickDateRow}>
+                    <TouchableOpacity 
+                      style={styles.quickDateButton} 
+                      onPress={() => setFutureDateTime(1, 'start')}
+                    >
+                      <Text style={styles.quickDateText}>พรุ่งนี้</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.quickDateButton} 
+                      onPress={() => setFutureDateTime(7, 'start')}
+                    >
+                      <Text style={styles.quickDateText}>อาทิตย์หน้า</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={styles.quickDateButton} 
+                      onPress={() => setFutureDateTime(30, 'start')}
+                    >
+                      <Text style={styles.quickDateText}>เดือนหน้า</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                // Mobile - use DateTimePicker
+                <View style={styles.dateTimeRow}>
+                  <TouchableOpacity 
+                    style={[styles.input, styles.dateButton, { flex: 1, marginRight: 4 }]}
+                    onPress={() => setShowStartDatePicker(true)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {startDate.toLocaleDateString('th-TH')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.input, styles.dateButton, { flex: 1, marginRight: 4 }]}
+                    onPress={() => setShowStartTimePicker(true)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {startDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.quickFillButton} 
+                    onPress={() => setCurrentDateTime('start')}
+                  >
+                    <Text style={styles.quickFillText}>ตอนนี้</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <Text style={styles.helpText}>
+                {Platform.OS === 'web' ? 'รูปแบบ: YYYY-MM-DD HH:MM' : 'แตะเพื่อเลือกวันที่และเวลา'}
+              </Text>
             </View>
             
             <View style={styles.dateTimeSection}>
               <Text style={styles.inputLabel}>วันที่และเวลาสิ้นสุด</Text>
-              <View style={styles.dateTimeRow}>
-                <TextInput
-                  style={[styles.input, { flex: 1, marginRight: 8 }]}
-                  placeholder="2024-09-10 17:00"
-                  value={endDatetime}
-                  onChangeText={setEndDatetime}
-                />
-                <TouchableOpacity 
-                  style={styles.quickFillButton} 
-                  onPress={() => setCurrentDateTime('end')}
-                >
-                  <Text style={styles.quickFillText}>+2ชม</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.helpText}>รูปแบบ: YYYY-MM-DD HH:MM</Text>
+              {Platform.OS === 'web' ? (
+                // Web fallback - use regular input
+                <View style={styles.dateTimeRow}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, marginRight: 8 }]}
+                    placeholder="2024-09-10 17:00"
+                    value={endDatetime}
+                    onChangeText={setEndDatetime}
+                  />
+                  <TouchableOpacity 
+                    style={styles.quickFillButton} 
+                    onPress={() => setCurrentDateTime('end')}
+                  >
+                    <Text style={styles.quickFillText}>+2ชม</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                // Mobile - use DateTimePicker
+                <View style={styles.dateTimeRow}>
+                  <TouchableOpacity 
+                    style={[styles.input, styles.dateButton, { flex: 1, marginRight: 4 }]}
+                    onPress={() => setShowEndDatePicker(true)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {endDate.toLocaleDateString('th-TH')}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.input, styles.dateButton, { flex: 1, marginRight: 4 }]}
+                    onPress={() => setShowEndTimePicker(true)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {endDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.quickFillButton} 
+                    onPress={() => setCurrentDateTime('end')}
+                  >
+                    <Text style={styles.quickFillText}>+2ชม</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              <Text style={styles.helpText}>
+                {Platform.OS === 'web' ? 'รูปแบบ: YYYY-MM-DD HH:MM' : 'แตะเพื่อเลือกวันที่และเวลา'}
+              </Text>
             </View>
             
             <Text style={styles.inputLabel}>ระยะเวลา (ชั่วโมง)</Text>
@@ -504,6 +668,10 @@ export default function RoomsScreen() {
                   setStartDatetime('');
                   setEndDatetime('');
                   setDuration('');
+                  // Reset date states
+                  const now = new Date();
+                  setStartDate(now);
+                  setEndDate(now);
                 }}
               >
                 <Text>ยกเลิก</Text>
@@ -512,6 +680,49 @@ export default function RoomsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* DateTimePickers - Only on mobile */}
+      {Platform.OS !== 'web' && DateTimePicker && (
+        <>
+          {showStartDatePicker && (
+            <DateTimePicker
+              value={startDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onStartDateChange}
+              minimumDate={new Date()}
+            />
+          )}
+
+          {showStartTimePicker && (
+            <DateTimePicker
+              value={startDate}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onStartTimeChange}
+            />
+          )}
+
+          {showEndDatePicker && (
+            <DateTimePicker
+              value={endDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onEndDateChange}
+              minimumDate={new Date()}
+            />
+          )}
+
+          {showEndTimePicker && (
+            <DateTimePicker
+              value={endDate}
+              mode="time"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={onEndTimeChange}
+            />
+          )}
+        </>
+      )}
 
       {/* Success Notification */}
       {successVisible && (
@@ -555,7 +766,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#eee',
   },
   title: {
-    fontWeight: 'bold',
+    fontFamily: 'Sarabun_600SemiBold',
     fontSize: 16,
     marginBottom: 4,
   },
@@ -676,6 +887,38 @@ const styles = StyleSheet.create({
   dateTimeRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  quickDateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  quickDateButton: {
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2196f3',
+  },
+  quickDateText: {
+    color: '#1976d2',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  dateButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderColor: '#dee2e6',
+    borderWidth: 1,
+    minHeight: 44,
+  },
+  dateButtonText: {
+    color: '#495057',
+    fontSize: 14,
+    fontWeight: '500',
   },
   quickFillButton: {
     backgroundColor: '#f39c12',

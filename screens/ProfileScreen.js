@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, Modal, TextInput, StyleSheet, Alert, Platform, Animated } from 'react-native';
+import { View, Text, Button, Modal, TextInput, StyleSheet, Alert, Platform, Animated, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
   const [loginVisible, setLoginVisible] = useState(false);
@@ -11,10 +12,12 @@ export default function ProfileScreen() {
   // Login state
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Register state
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
   const [regFullname, setRegFullname] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regRole, setRegRole] = useState('student');
@@ -128,6 +131,7 @@ export default function ProfileScreen() {
         // Clear login form
         setLoginUsername('');
         setLoginPassword('');
+        setShowLoginPassword(false);
         setLoginVisible(false);
         
         // ดึง profile ใหม่
@@ -168,6 +172,7 @@ export default function ProfileScreen() {
         // Clear register form
         setRegUsername('');
         setRegPassword('');
+        setShowRegPassword(false);
         setRegFullname('');
         setRegEmail('');
         setRegRole('student');
@@ -247,13 +252,25 @@ export default function ProfileScreen() {
               style={styles.input}
               autoCapitalize="none"
             />
-            <TextInput
-              placeholder="รหัสผ่าน"
-              value={loginPassword}
-              onChangeText={setLoginPassword}
-              style={styles.input}
-              secureTextEntry
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                placeholder="รหัสผ่าน"
+                value={loginPassword}
+                onChangeText={setLoginPassword}
+                style={styles.passwordInput}
+                secureTextEntry={!showLoginPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowLoginPassword(!showLoginPassword)}
+              >
+                <Ionicons
+                  name={showLoginPassword ? "eye-off" : "eye"}
+                  size={24}
+                  color="#666"
+                />
+              </TouchableOpacity>
+            </View>
             <View style={styles.row}>
               <Button title="เข้าสู่ระบบ" onPress={handleLogin} />
               <Button 
@@ -263,6 +280,7 @@ export default function ProfileScreen() {
                   setLoginVisible(false);
                   setLoginUsername('');
                   setLoginPassword('');
+                  setShowLoginPassword(false);
                 }} 
               />
             </View>
@@ -282,13 +300,25 @@ export default function ProfileScreen() {
               style={styles.input}
               autoCapitalize="none"
             />
-            <TextInput
-              placeholder="รหัสผ่าน"
-              value={regPassword}
-              onChangeText={setRegPassword}
-              style={styles.input}
-              secureTextEntry
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                placeholder="รหัสผ่าน"
+                value={regPassword}
+                onChangeText={setRegPassword}
+                style={styles.passwordInput}
+                secureTextEntry={!showRegPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowRegPassword(!showRegPassword)}
+              >
+                <Ionicons
+                  name={showRegPassword ? "eye-off" : "eye"}
+                  size={24}
+                  color="#666"
+                />
+              </TouchableOpacity>
+            </View>
             <TextInput
               placeholder="ชื่อจริง"
               value={regFullname}
@@ -324,6 +354,7 @@ export default function ProfileScreen() {
                   setRegisterVisible(false);
                   setRegUsername('');
                   setRegPassword('');
+                  setShowRegPassword(false);
                   setRegFullname('');
                   setRegEmail('');
                   setRegRole('student');
@@ -521,5 +552,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  // Password input with eye icon styles
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    marginBottom: 12,
+    paddingRight: 12,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 12,
+    fontSize: 16,
+    fontFamily: 'Sarabun_400Regular',
+  },
+  eyeIcon: {
+    padding: 8,
   },
 });
