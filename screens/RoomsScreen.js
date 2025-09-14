@@ -38,10 +38,96 @@ export default function RoomsScreen() {
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
+  // Time picker states
+  const [startHour, setStartHour] = useState('09');
+  const [startMinute, setStartMinute] = useState('00');
+  const [endHour, setEndHour] = useState('11');
+  const [endMinute, setEndMinute] = useState('00');
+  const [showStartHourPicker, setShowStartHourPicker] = useState(false);
+  const [showStartMinutePicker, setShowStartMinutePicker] = useState(false);
+  const [showEndHourPicker, setShowEndHourPicker] = useState(false);
+  const [showEndMinutePicker, setShowEndMinutePicker] = useState(false);
+
+  // Generate hour and minute options
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+  const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+  // Update datetime string from date and time components
+  const updateDateTimeString = (type) => {
+    const date = type === 'start' ? startDate : endDate;
+    const hour = type === 'start' ? startHour : endHour;
+    const minute = type === 'start' ? startMinute : endMinute;
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    const dateTimeString = `${year}-${month}-${day} ${hour}:${minute}`;
+    
+    if (type === 'start') {
+      setStartDatetime(dateTimeString);
+    } else {
+      setEndDatetime(dateTimeString);
+    }
+    
+    // Auto calculate duration when both times are set - use setTimeout to ensure state is updated
+    setTimeout(() => {
+      calculateDuration();
+    }, 100);
+  };
+
+  // Calculate duration automatically
+  const calculateDuration = () => {
+    try {
+      // Parse hours and minutes as integers
+      const startHourInt = parseInt(startHour, 10);
+      const startMinuteInt = parseInt(startMinute, 10);
+      const endHourInt = parseInt(endHour, 10);
+      const endMinuteInt = parseInt(endMinute, 10);
+      
+      // Convert everything to minutes for easier calculation
+      const startTotalMinutes = startHourInt * 60 + startMinuteInt;
+      const endTotalMinutes = endHourInt * 60 + endMinuteInt;
+      
+      console.log('Start time:', startHour + ':' + startMinute, '=', startTotalMinutes, 'minutes');
+      console.log('End time:', endHour + ':' + endMinute, '=', endTotalMinutes, 'minutes');
+      
+      // Handle case where end time is next day
+      let diffMinutes;
+      if (endTotalMinutes >= startTotalMinutes) {
+        diffMinutes = endTotalMinutes - startTotalMinutes;
+      } else {
+        // End time is next day
+        diffMinutes = (24 * 60) - startTotalMinutes + endTotalMinutes;
+      }
+      
+      // Convert minutes back to hours
+      const diffHours = diffMinutes / 60;
+      
+      console.log('Difference in minutes:', diffMinutes);
+      console.log('Difference in hours:', diffHours);
+      
+      // Round to 1 decimal place
+      const roundedHours = Math.round(diffHours * 10) / 10;
+      
+      console.log('Final duration:', roundedHours, 'hours');
+      setDuration(roundedHours.toString());
+      
+    } catch (error) {
+      console.log('Error calculating duration:', error);
+      setDuration('0');
+    }
+  };
+
   // success notification state
   const [successVisible, setSuccessVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
+
+  // Auto-calculate duration when time values change
+  useEffect(() => {
+    calculateDuration();
+  }, [startHour, startMinute, endHour, endMinute]);
 
   // ตรวจสอบสถานะการ login
   const checkLoginStatus = async () => {
@@ -381,19 +467,245 @@ export default function RoomsScreen() {
       buttonText = 'จองห้อง';
     }
 
-    return (
-      <View style={styles.card}>
-        <Image
-          source={{ uri: getImageForRoom(item) }}
-          style={styles.image}
-        />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>{item.room_name} ({item.building})</Text>
-          <Text>ประเภท: {item.type}</Text>
-          <Text>ความจุ: {item.capacity} คน</Text>
-          <Text>สิ่งอำนวยความสะดวก: {item.facilities.join(', ')}</Text>
-          <Text>สถานะ: {item.status === 'available' ? 'ว่าง' : 'ไม่ว่าง'}</Text>
+    // กำหนดรูปภาพห้องตามประเภทและชื่อห้อง
+    const getRoomImage = (type, roomName) => {
+      // ตรวจสอบชื่อห้องพิเศษก่อน
+      const nameCheck = roomName?.toLowerCase() || '';
+      
+      if (nameCheck.includes('music') || nameCheck.includes('ดนตรี')) {
+        if (nameCheck.includes('1') || nameCheck.includes('a')) {
+          return require('../assets/rooms/music-room-1.jpg');
+        } else if (nameCheck.includes('2') || nameCheck.includes('b')) {
+          return require('../assets/rooms/music-room-2.jpg');
+        }
+        return require('../assets/rooms/music-room.jpg');
+      }
+      
+      if (nameCheck.includes('art') || nameCheck.includes('ศิลปะ')) {
+        if (nameCheck.includes('1') || nameCheck.includes('a')) {
+          return require('../assets/rooms/art-room-1.jpg');
+        } else if (nameCheck.includes('2') || nameCheck.includes('b')) {
+          return require('../assets/rooms/art-room-2.jpg');
+        }
+        return require('../assets/rooms/art-room.jpg');
+      }
+
+      if (nameCheck.includes('science') || nameCheck.includes('วิทยาศาสตร์')) {
+        return require('../assets/rooms/science-room.jpg');
+      }
+
+      if (nameCheck.includes('gym') || nameCheck.includes('ออกกำลัง')) {
+        return require('../assets/rooms/gym-room.jpg');
+      }
+
+      if (nameCheck.includes('studio') || nameCheck.includes('สตูดิโอ')) {
+        return require('../assets/rooms/studio-room.jpg');
+      }
+
+      if (nameCheck.includes('theater') || nameCheck.includes('โรงละคร')) {
+        return require('../assets/rooms/theater-room.jpg');
+      }
+
+      // ใช้ประเภทห้องเป็นหลัก แต่แยกตามชื่อห้อง
+      switch (type?.toLowerCase()) {
+        case 'lab':
+          // สำหรับห้อง lab หลายห้อง
+          if (nameCheck.includes('1') || nameCheck.includes('a') || nameCheck.includes('biology') || nameCheck.includes('ชีววิทยา')) {
+            return require('../assets/rooms/lab-room-1.jpg');
+          } else if (nameCheck.includes('2') || nameCheck.includes('b') || nameCheck.includes('chemistry') || nameCheck.includes('เคมี')) {
+            return require('../assets/rooms/lab-room-2.jpg');
+          } else if (nameCheck.includes('3') || nameCheck.includes('c') || nameCheck.includes('physics') || nameCheck.includes('ฟิสิกส์')) {
+            return require('../assets/rooms/lab-room-3.jpg');
+          } else if (nameCheck.includes('computer') || nameCheck.includes('คอมพิวเตอร์')) {
+            return require('../assets/rooms/computer-lab.jpg');
+          }
+          return require('../assets/rooms/lab-room.jpg');
           
+        case 'classroom':
+          // สำหรับห้องเรียนหลายห้อง
+          if (nameCheck.includes('1') || nameCheck.includes('a')) {
+            return require('../assets/rooms/classroom-1.jpg');
+          } else if (nameCheck.includes('2') || nameCheck.includes('b')) {
+            return require('../assets/rooms/classroom-2.jpg');
+          } else if (nameCheck.includes('3') || nameCheck.includes('c')) {
+            return require('../assets/rooms/classroom-3.jpg');
+          }
+          return require('../assets/rooms/classroom.jpg');
+          
+        case 'meeting':
+          if (nameCheck.includes('small') || nameCheck.includes('เล็ก') || nameCheck.includes('1')) {
+            return require('../assets/rooms/meeting-room-small.jpg');
+          } else if (nameCheck.includes('large') || nameCheck.includes('ใหญ่') || nameCheck.includes('2')) {
+            return require('../assets/rooms/meeting-room-large.jpg');
+          }
+          return require('../assets/rooms/meeting-room.jpg');
+          
+        case 'conference':
+          return require('../assets/rooms/conference-room.jpg');
+        case 'seminar':
+          return require('../assets/rooms/seminar-room.jpg');
+        case 'workshop':
+          return require('../assets/rooms/workshop-room.jpg');
+        case 'computer':
+          return require('../assets/rooms/computer-lab.jpg');
+        case 'library':
+          return require('../assets/rooms/library-room.jpg');
+        case 'auditorium':
+          return require('../assets/rooms/auditorium-room.jpg');
+        case 'training':
+          return require('../assets/rooms/training-room.jpg');
+        default:
+          return require('../assets/rooms/default-room.jpg');
+      }
+    };
+
+    // กำหนดไอคอนห้องตามประเภท (สำหรับโอเวอร์เลย์)
+    const getRoomIcon = (type, roomName) => {
+      const nameCheck = roomName?.toLowerCase() || '';
+      
+      if (nameCheck.includes('music') || nameCheck.includes('ดนตรี')) return '🎵';
+      if (nameCheck.includes('art') || nameCheck.includes('ศิลปะ')) return '🎨';
+      if (nameCheck.includes('science') || nameCheck.includes('วิทยาศาสตร์')) return '🧪';
+      if (nameCheck.includes('gym') || nameCheck.includes('ออกกำลัง')) return '🏃‍♂️';
+      if (nameCheck.includes('kitchen') || nameCheck.includes('ครัว')) return '👨‍🍳';
+      if (nameCheck.includes('studio') || nameCheck.includes('สตูดิโอ')) return '🎬';
+      if (nameCheck.includes('theater') || nameCheck.includes('โรงละคร')) return '🎭';
+      if (nameCheck.includes('dance') || nameCheck.includes('เต้น')) return '💃';
+
+      switch (type?.toLowerCase()) {
+        case 'lab': return '🔬';
+        case 'classroom': return '📚';
+        case 'meeting': return '💼';
+        case 'conference': return '👥';
+        case 'seminar': return '🎓';
+        case 'workshop': return '🔧';
+        case 'computer': return '💻';
+        case 'library': return '📖';
+        case 'auditorium': return '🎭';
+        case 'training': return '📝';
+        default: return '🏢';
+      }
+    };
+
+    const getRoomGradient = (type, roomName) => {
+      // สร้างสีตามชื่อห้องและประเภทเพื่อให้แต่ละห้องมีสีที่แตกต่างกัน
+      const colors = [
+        ['#667eea', '#764ba2'], // Purple-Blue
+        ['#f093fb', '#f5576c'], // Pink-Red
+        ['#4facfe', '#00f2fe'], // Blue-Cyan
+        ['#43e97b', '#38f9d7'], // Green-Mint
+        ['#fa709a', '#fee140'], // Pink-Yellow
+        ['#a8edea', '#fed6e3'], // Mint-Pink
+        ['#ff9a9e', '#fecfef'], // Coral-Pink
+        ['#96e6a1', '#d4fc79'], // Green-Lime
+        ['#89f7fe', '#66a6ff'], // Cyan-Blue
+        ['#fdbb2d', '#22c1c3'], // Yellow-Teal
+        ['#ee9ca7', '#ffdde1'], // Rose-Light Pink
+        ['#30cfd0', '#91a7ff'], // Teal-Purple
+        ['#ff6b6b', '#ffa726'], // Red-Orange
+        ['#4ecdc4', '#44a08d'], // Teal-Green
+        ['#845ec2', '#b39bc8'], // Purple-Lavender
+        ['#f8b500', '#ffd54f'], // Orange-Yellow
+      ];
+
+      // ใช้ชื่อห้องและประเภทในการเลือกสี
+      const hash = (roomName + type).split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      
+      return colors[Math.abs(hash) % colors.length];
+    };
+
+    // เพิ่มลูกเล่นพิเศษให้แต่ละห้อง
+    const getRoomPattern = (roomName) => {
+      const patterns = ['circle', 'square', 'triangle', 'diamond'];
+      const hash = roomName.split('').reduce((a, b) => {
+        a = ((a << 5) - a) + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      return patterns[Math.abs(hash) % patterns.length];
+    };
+
+    return (
+      <TouchableOpacity 
+        style={styles.roomCard}
+        activeOpacity={0.9}
+        onPress={() => {
+          if (!isLoggedIn) {
+            Alert.alert(
+              'กรุณาเข้าสู่ระบบ',
+              'คุณต้องเข้าสู่ระบบก่อนจองห้อง',
+              [
+                {
+                  text: 'ตกลง',
+                  onPress: () => {/* นำไปหน้า login หรือ profile */}
+                }
+              ]
+            );
+            return;
+          }
+          
+          if (!isRoomAvailable) {
+            Alert.alert('ห้องไม่ว่าง', 'ขณะนี้ห้องนี้ไม่สามารถจองได้');
+            return;
+          }
+          
+          setSelectedRoom(item);
+          setBookingVisible(true);
+        }}
+      >
+        {/* Room Image */}
+        <View style={styles.roomImageContainer}>
+          <Image 
+            source={getRoomImage(item.type, item.room_name)}
+            style={styles.roomImage}
+            resizeMode="cover"
+          />
+        </View>
+        
+        {/* Room Content */}
+        <View style={styles.roomContent}>
+          <Text style={styles.roomName}>{item.room_name}</Text>
+          <Text style={styles.roomBuilding}>{item.building}</Text>
+          
+          {/* Room Features */}
+          <View style={styles.roomFeatures}>
+            <View style={styles.featureTag}>
+              <Text style={styles.featureText}>{item.type}</Text>
+            </View>
+            <View style={styles.featureTag}>
+              <Text style={styles.featureText}>{item.capacity} คน</Text>
+            </View>
+            <View style={[styles.featureTag, styles.statusTag, 
+              item.status === 'available' ? styles.availableTag : styles.unavailableTag
+            ]}>
+              <Text style={[styles.featureText, 
+                item.status === 'available' ? styles.availableText : styles.unavailableText
+              ]}>
+                {item.status === 'available' ? 'ว่าง' : 'ไม่ว่าง'}
+              </Text>
+            </View>
+          </View>
+          
+          {/* Facilities */}
+          {item.facilities && item.facilities.length > 0 && (
+            <View style={styles.facilitiesContainer}>
+              <Text style={styles.facilitiesLabel}>สิ่งอำนวยความสะดวก:</Text>
+              <View style={styles.facilitiesWrap}>
+                {item.facilities.slice(0, 3).map((facility, index) => (
+                  <View key={index} style={styles.facilityItem}>
+                    <Text style={styles.facilityText}>• {facility}</Text>
+                  </View>
+                ))}
+                {item.facilities.length > 3 && (
+                  <Text style={styles.moreText}>+{item.facilities.length - 3} อื่นๆ</Text>
+                )}
+              </View>
+            </View>
+          )}
+          
+          {/* Book Button */}
           <TouchableOpacity
             style={buttonStyle}
             onPress={() => {
@@ -401,30 +713,24 @@ export default function RoomsScreen() {
                 Alert.alert(
                   'กรุณาเข้าสู่ระบบ',
                   'คุณต้องเข้าสู่ระบบก่อนจองห้อง',
-                  [
-                    {
-                      text: 'ตกลง',
-                      onPress: () => {/* นำไปหน้า login หรือ profile */}
-                    }
-                  ]
+                  [{ text: 'ตกลง' }]
                 );
+                return;
+              }
+              
+              if (!isRoomAvailable) {
+                Alert.alert('ห้องไม่ว่าง', 'ขณะนี้ห้องนี้ไม่สามารถจองได้');
                 return;
               }
               
               setSelectedRoom(item);
               setBookingVisible(true);
             }}
-            disabled={!canBook}
           >
-            <Text style={[
-              styles.bookButtonText,
-              !canBook && styles.bookButtonTextDisabled
-            ]}>
-              {buttonText}
-            </Text>
+            <Text style={styles.bookButtonText}>{buttonText}</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -528,133 +834,282 @@ export default function RoomsScreen() {
             
             <View style={styles.dateTimeSection}>
               <Text style={styles.inputLabel}>วันที่และเวลาเริ่ม</Text>
-              {Platform.OS === 'web' ? (
-                // Web fallback - use regular input with helper buttons
-                <>
-                  <View style={styles.dateTimeRow}>
-                    <TextInput
-                      style={[styles.input, { flex: 1, marginRight: 8 }]}
-                      placeholder="2024-09-10 14:00"
-                      value={startDatetime}
-                      onChangeText={setStartDatetime}
+              
+              {/* Date Section - Vertical Layout */}
+              <View style={styles.dateSection}>
+                <View style={styles.dateColumn}>
+                  <Text style={styles.columnLabel}>วันที่เริ่ม</Text>
+                  {Platform.OS === 'web' ? (
+                    <input
+                      type="date"
+                      style={{
+                        width: '100%',
+                        padding: 12,
+                        fontSize: 16,
+                        border: '1px solid #ddd',
+                        borderRadius: 10,
+                        backgroundColor: '#fff'
+                      }}
+                      value={startDate.toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const newDate = new Date(e.target.value);
+                        if (!isNaN(newDate.getTime())) {
+                          setStartDate(newDate);
+                          updateDateTimeString('start');
+                        }
+                      }}
                     />
+                  ) : (
                     <TouchableOpacity 
-                      style={styles.quickFillButton} 
-                      onPress={() => setCurrentDateTime('start')}
+                      style={[styles.input, styles.dateButton]}
+                      onPress={() => setShowStartDatePicker(true)}
                     >
-                      <Text style={styles.quickFillText}>ตอนนี้</Text>
+                      <Text style={styles.dateButtonText}>
+                        {startDate.toLocaleDateString('th-TH')}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.dateColumn}>
+                  <Text style={styles.columnLabel}>วันที่สิ้นสุด</Text>
+                  {Platform.OS === 'web' ? (
+                    <input
+                      type="date"
+                      style={{
+                        width: '100%',
+                        padding: 12,
+                        fontSize: 16,
+                        border: '1px solid #ddd',
+                        borderRadius: 10,
+                        backgroundColor: '#fff'
+                      }}
+                      value={endDate.toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const newDate = new Date(e.target.value);
+                        if (!isNaN(newDate.getTime())) {
+                          setEndDate(newDate);
+                          updateDateTimeString('end');
+                        }
+                      }}
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.input, styles.dateButton]}
+                      onPress={() => setShowEndDatePicker(true)}
+                    >
+                      <Text style={styles.dateButtonText}>
+                        {endDate.toLocaleDateString('th-TH')}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Time Row - Start and End Time */}
+              <View style={styles.timeSection}>
+                <Text style={styles.sectionLabel}>เวลา</Text>
+                <View style={styles.timeRow}>
+                  {/* Start Time */}
+                  <View style={styles.timeColumn}>
+                    <Text style={styles.columnLabel}>เวลาเริ่ม</Text>
+                    <View style={styles.timePickerRow}>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton}
+                        onPress={() => setShowStartHourPicker(!showStartHourPicker)}
+                      >
+                        <Text style={styles.timePickerText}>{startHour}</Text>
+                        <Text style={styles.dropdownIcon}>▼</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.timeSeparator}>:</Text>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton}
+                        onPress={() => setShowStartMinutePicker(!showStartMinutePicker)}
+                      >
+                        <Text style={styles.timePickerText}>{startMinute}</Text>
+                        <Text style={styles.dropdownIcon}>▼</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* End Time */}
+                  <View style={styles.timeColumn}>
+                    <Text style={styles.columnLabel}>เวลาสิ้นสุด</Text>
+                    <View style={styles.timePickerRow}>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton}
+                        onPress={() => setShowEndHourPicker(!showEndHourPicker)}
+                      >
+                        <Text style={styles.timePickerText}>{endHour}</Text>
+                        <Text style={styles.dropdownIcon}>▼</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.timeSeparator}>:</Text>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton}
+                        onPress={() => setShowEndMinutePicker(!showEndMinutePicker)}
+                      >
+                        <Text style={styles.timePickerText}>{endMinute}</Text>
+                        <Text style={styles.dropdownIcon}>▼</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Quick Fill Buttons */}
+              <View style={styles.quickActionRow}>
+                <TouchableOpacity 
+                  style={styles.quickActionButton} 
+                  onPress={() => setCurrentDateTime('start')}
+                >
+                  <Text style={styles.quickActionText}>ตอนนี้</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.quickActionButton} 
+                  onPress={() => setFutureDateTime(1, 'start')}
+                >
+                  <Text style={styles.quickActionText}>พรุ่งนี้</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.quickActionButton} 
+                  onPress={() => setFutureDateTime(7, 'start')}
+                >
+                  <Text style={styles.quickActionText}>อาทิตย์หน้า</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Dropdown Menus */}
+            {showStartHourPicker && (
+              <View style={styles.dropdownOverlay}>
+                <View style={styles.dropdownContainer}>
+                  <View style={styles.dropdownHeader}>
+                    <Text style={styles.dropdownTitle}>เลือกชั่วโมงเริ่ม</Text>
+                    <TouchableOpacity 
+                      style={styles.closeButton}
+                      onPress={() => setShowStartHourPicker(false)}
+                    >
+                      <Text style={styles.closeButtonText}>✕</Text>
                     </TouchableOpacity>
                   </View>
-                  <View style={styles.quickDateRow}>
+                  <View style={styles.dropdownGrid}>
+                    {hours.map((hour) => (
+                      <TouchableOpacity
+                        key={hour}
+                        style={[styles.dropdownItem, startHour === hour && styles.dropdownItemSelected]}
+                        onPress={() => {
+                          setStartHour(hour);
+                          setShowStartHourPicker(false);
+                          updateDateTimeString('start');
+                        }}
+                      >
+                        <Text style={[styles.dropdownItemText, startHour === hour && styles.dropdownItemTextSelected]}>{hour}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {showStartMinutePicker && (
+              <View style={styles.dropdownOverlay}>
+                <View style={styles.dropdownContainer}>
+                  <View style={styles.dropdownHeader}>
+                    <Text style={styles.dropdownTitle}>เลือกนาทีเริ่ม</Text>
                     <TouchableOpacity 
-                      style={styles.quickDateButton} 
-                      onPress={() => setFutureDateTime(1, 'start')}
+                      style={styles.closeButton}
+                      onPress={() => setShowStartMinutePicker(false)}
                     >
-                      <Text style={styles.quickDateText}>พรุ่งนี้</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.quickDateButton} 
-                      onPress={() => setFutureDateTime(7, 'start')}
-                    >
-                      <Text style={styles.quickDateText}>อาทิตย์หน้า</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.quickDateButton} 
-                      onPress={() => setFutureDateTime(30, 'start')}
-                    >
-                      <Text style={styles.quickDateText}>เดือนหน้า</Text>
+                      <Text style={styles.closeButtonText}>✕</Text>
                     </TouchableOpacity>
                   </View>
-                </>
-              ) : (
-                // Mobile - use DateTimePicker
-                <View style={styles.dateTimeRow}>
-                  <TouchableOpacity 
-                    style={[styles.input, styles.dateButton, { flex: 1, marginRight: 4 }]}
-                    onPress={() => setShowStartDatePicker(true)}
-                  >
-                    <Text style={styles.dateButtonText}>
-                      {startDate.toLocaleDateString('th-TH')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.input, styles.dateButton, { flex: 1, marginRight: 4 }]}
-                    onPress={() => setShowStartTimePicker(true)}
-                  >
-                    <Text style={styles.dateButtonText}>
-                      {startDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.quickFillButton} 
-                    onPress={() => setCurrentDateTime('start')}
-                  >
-                    <Text style={styles.quickFillText}>ตอนนี้</Text>
-                  </TouchableOpacity>
+                  <View style={styles.dropdownGrid}>
+                    {minutes.filter((_, index) => index % 5 === 0).map((minute) => (
+                      <TouchableOpacity
+                        key={minute}
+                        style={[styles.dropdownItem, startMinute === minute && styles.dropdownItemSelected]}
+                        onPress={() => {
+                          setStartMinute(minute);
+                          setShowStartMinutePicker(false);
+                          updateDateTimeString('start');
+                        }}
+                      >
+                        <Text style={[styles.dropdownItemText, startMinute === minute && styles.dropdownItemTextSelected]}>{minute}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              )}
-              <Text style={styles.helpText}>
-                {Platform.OS === 'web' ? 'รูปแบบ: YYYY-MM-DD HH:MM' : 'แตะเพื่อเลือกวันที่และเวลา'}
-              </Text>
-            </View>
-            
-            <View style={styles.dateTimeSection}>
-              <Text style={styles.inputLabel}>วันที่และเวลาสิ้นสุด</Text>
-              {Platform.OS === 'web' ? (
-                // Web fallback - use regular input
-                <View style={styles.dateTimeRow}>
-                  <TextInput
-                    style={[styles.input, { flex: 1, marginRight: 8 }]}
-                    placeholder="2024-09-10 17:00"
-                    value={endDatetime}
-                    onChangeText={setEndDatetime}
-                  />
-                  <TouchableOpacity 
-                    style={styles.quickFillButton} 
-                    onPress={() => setCurrentDateTime('end')}
-                  >
-                    <Text style={styles.quickFillText}>+2ชม</Text>
-                  </TouchableOpacity>
+              </View>
+            )}
+
+            {showEndHourPicker && (
+              <View style={styles.dropdownOverlay}>
+                <View style={styles.dropdownContainer}>
+                  <View style={styles.dropdownHeader}>
+                    <Text style={styles.dropdownTitle}>เลือกชั่วโมงสิ้นสุด</Text>
+                    <TouchableOpacity 
+                      style={styles.closeButton}
+                      onPress={() => setShowEndHourPicker(false)}
+                    >
+                      <Text style={styles.closeButtonText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.dropdownGrid}>
+                    {hours.map((hour) => (
+                      <TouchableOpacity
+                        key={hour}
+                        style={[styles.dropdownItem, endHour === hour && styles.dropdownItemSelected]}
+                        onPress={() => {
+                          setEndHour(hour);
+                          setShowEndHourPicker(false);
+                          updateDateTimeString('end');
+                        }}
+                      >
+                        <Text style={[styles.dropdownItemText, endHour === hour && styles.dropdownItemTextSelected]}>{hour}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              ) : (
-                // Mobile - use DateTimePicker
-                <View style={styles.dateTimeRow}>
-                  <TouchableOpacity 
-                    style={[styles.input, styles.dateButton, { flex: 1, marginRight: 4 }]}
-                    onPress={() => setShowEndDatePicker(true)}
-                  >
-                    <Text style={styles.dateButtonText}>
-                      {endDate.toLocaleDateString('th-TH')}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.input, styles.dateButton, { flex: 1, marginRight: 4 }]}
-                    onPress={() => setShowEndTimePicker(true)}
-                  >
-                    <Text style={styles.dateButtonText}>
-                      {endDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.quickFillButton} 
-                    onPress={() => setCurrentDateTime('end')}
-                  >
-                    <Text style={styles.quickFillText}>+2ชม</Text>
-                  </TouchableOpacity>
+              </View>
+            )}
+
+            {showEndMinutePicker && (
+              <View style={styles.dropdownOverlay}>
+                <View style={styles.dropdownContainer}>
+                  <View style={styles.dropdownHeader}>
+                    <Text style={styles.dropdownTitle}>เลือกนาทีสิ้นสุด</Text>
+                    <TouchableOpacity 
+                      style={styles.closeButton}
+                      onPress={() => setShowEndMinutePicker(false)}
+                    >
+                      <Text style={styles.closeButtonText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.dropdownGrid}>
+                    {minutes.filter((_, index) => index % 5 === 0).map((minute) => (
+                      <TouchableOpacity
+                        key={minute}
+                        style={[styles.dropdownItem, endMinute === minute && styles.dropdownItemSelected]}
+                        onPress={() => {
+                          setEndMinute(minute);
+                          setShowEndMinutePicker(false);
+                          updateDateTimeString('end');
+                        }}
+                      >
+                        <Text style={[styles.dropdownItemText, endMinute === minute && styles.dropdownItemTextSelected]}>{minute}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              )}
-              <Text style={styles.helpText}>
-                {Platform.OS === 'web' ? 'รูปแบบ: YYYY-MM-DD HH:MM' : 'แตะเพื่อเลือกวันที่และเวลา'}
-              </Text>
-            </View>
+              </View>
+            )}
             
             <Text style={styles.inputLabel}>ระยะเวลา (ชั่วโมง)</Text>
             <TextInput
-              style={styles.input}
-              placeholder="3"
+              style={[styles.input, styles.readonlyInput]}
+              placeholder="ระยะเวลาจะคำนวณอัตโนมัติ"
               value={duration}
-              onChangeText={setDuration}
-              keyboardType="numeric"
+              editable={false}
             />
             
             <View style={styles.row}>
@@ -755,9 +1210,129 @@ const styles = StyleSheet.create({
       height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 3.84,
+    shadowRadius: 4,
+  },
+  // New Room Card Styles
+  roomCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 16,
+    marginHorizontal: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  roomImageContainer: {
+    width: '100%',
+    height: 200,
+    backgroundColor: '#f8f9fa',
+    overflow: 'hidden',
+  },
+  roomImage: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#e9ecef',
+  },
+  roomIcon: {
+    fontSize: 48,
+    color: '#fff',
+    zIndex: 2,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
     alignItems: 'center',
   },
+  roomContent: {
+    padding: 16,
+  },
+  roomName: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 4,
+    color: '#212529',
+    fontFamily: 'Sarabun',
+  },
+  roomBuilding: {
+    fontSize: 14,
+    color: '#6c757d',
+    marginBottom: 12,
+    fontFamily: 'Sarabun',
+  },
+  roomFeatures: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  featureTag: {
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  featureText: {
+    color: '#495057',
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'Sarabun',
+  },
+  statusTag: {
+    marginLeft: 'auto',
+  },
+  availableTag: {
+    backgroundColor: '#e8f5e8',
+  },
+  unavailableTag: {
+    backgroundColor: '#ffebee',
+  },
+  availableText: {
+    color: '#2e7d32',
+  },
+  unavailableText: {
+    color: '#c62828',
+  },
+  facilitiesContainer: {
+    marginBottom: 15,
+  },
+  facilitiesLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+    fontFamily: 'Sarabun',
+  },
+  facilitiesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  facilityItem: {
+    marginRight: 8,
+    marginBottom: 4,
+  },
+  facilityText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'Sarabun',
+  },
+  moreText: {
+    fontSize: 12,
+    color: '#1976d2',
+    fontWeight: '500',
+    fontFamily: 'Sarabun',
+  },
+  // Existing styles  
   image: {
     width: 80,
     height: 80,
@@ -981,5 +1556,181 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  // New grid-based date/time styles
+  dateRow: {
+    flexDirection: 'row',
+    gap: 15,
+    marginBottom: 20,
+  },
+  dateSection: {
+    marginBottom: 20,
+  },
+  dateColumn: {
+    marginBottom: 15,
+  },
+  columnLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 6,
+  },
+  timeSection: {
+    marginTop: 10,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    gap: 15,
+    marginBottom: 15,
+  },
+  timeColumn: {
+    flex: 1,
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minWidth: 60,
+  },
+  timePickerText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  dropdownIcon: {
+    fontSize: 10,
+    color: '#666',
+    marginLeft: 8,
+  },
+  timeSeparator: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginHorizontal: 8,
+  },
+  quickActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+    marginBottom: 15,
+  },
+  quickActionButton: {
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2196f3',
+  },
+  quickActionText: {
+    color: '#1976d2',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  // Dropdown styles
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  dropdownContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    margin: 20,
+    padding: 20,
+    maxHeight: '80%',
+    width: '90%',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+    textAlign: 'center',
+  },
+  closeButton: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 20,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  dropdownGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  dropdownItem: {
+    width: '18%',
+    aspectRatio: 1,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#2196f3',
+    borderColor: '#1976d2',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  dropdownItemTextSelected: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  readonlyInput: {
+    backgroundColor: '#f8f9fa',
+    color: '#666',
   },
 });

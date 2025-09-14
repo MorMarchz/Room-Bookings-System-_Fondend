@@ -27,7 +27,9 @@ export default function ProfileScreen() {
   // Register state
   const [regUsername, setRegUsername] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState(false);
   const [regFullname, setRegFullname] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regRole, setRegRole] = useState('student');
@@ -164,8 +166,18 @@ export default function ProfileScreen() {
 
   // Register handler
   const handleRegister = async () => {
-    if (!regUsername || !regPassword || !regFullname || !regEmail) {
+    if (!regUsername || !regPassword || !regConfirmPassword || !regFullname || !regEmail) {
       showErrorNotification('กรุณาใส่ข้อมูลให้ครบถ้วน');
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      showErrorNotification('รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน');
+      return;
+    }
+
+    if (regPassword.length < 6) {
+      showErrorNotification('รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร');
       return;
     }
 
@@ -187,7 +199,9 @@ export default function ProfileScreen() {
         // Clear register form
         setRegUsername('');
         setRegPassword('');
+        setRegConfirmPassword('');
         setShowRegPassword(false);
+        setShowRegConfirmPassword(false);
         setRegFullname('');
         setRegEmail('');
         setRegRole('student');
@@ -875,7 +889,7 @@ export default function ProfileScreen() {
                 onPress={() => setShowLoginPassword(!showLoginPassword)}
               >
                 <Ionicons
-                  name={showLoginPassword ? "eye-off" : "eye"}
+                  name={showLoginPassword ? "eye" : "eye-off"}
                   size={24}
                   color="#666"
                 />
@@ -923,7 +937,26 @@ export default function ProfileScreen() {
                 onPress={() => setShowRegPassword(!showRegPassword)}
               >
                 <Ionicons
-                  name={showRegPassword ? "eye-off" : "eye"}
+                  name={showRegPassword ? "eye" : "eye-off"}
+                  size={24}
+                  color="#666"
+                />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                placeholder="ยืนยันรหัสผ่าน"
+                value={regConfirmPassword}
+                onChangeText={setRegConfirmPassword}
+                style={styles.passwordInput}
+                secureTextEntry={!showRegConfirmPassword}
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+              >
+                <Ionicons
+                  name={showRegConfirmPassword ? "eye" : "eye-off"}
                   size={24}
                   color="#666"
                 />
