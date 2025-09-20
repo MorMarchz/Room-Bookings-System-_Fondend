@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,6 +30,22 @@ export default function BookingListScreen({ navigation }) {
   const [editEndDatetime, setEditEndDatetime] = useState('');
   const [editDuration, setEditDuration] = useState('');
   const [updating, setUpdating] = useState(false);
+  
+  // Date picker states for edit modal
+  const [editStartDate, setEditStartDate] = useState(new Date());
+  const [editEndDate, setEditEndDate] = useState(new Date());
+  const [showEditStartDatePicker, setShowEditStartDatePicker] = useState(false);
+  const [showEditEndDatePicker, setShowEditEndDatePicker] = useState(false);
+  
+  // Time picker states for edit modal
+  const [editStartHour, setEditStartHour] = useState('09');
+  const [editStartMinute, setEditStartMinute] = useState('00');
+  const [editEndHour, setEditEndHour] = useState('11');
+  const [editEndMinute, setEditEndMinute] = useState('00');
+  const [showEditStartHourPicker, setShowEditStartHourPicker] = useState(false);
+  const [showEditStartMinutePicker, setShowEditStartMinutePicker] = useState(false);
+  const [showEditEndHourPicker, setShowEditEndHourPicker] = useState(false);
+  const [showEditEndMinutePicker, setShowEditEndMinutePicker] = useState(false);
   
   // Delete modal states
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -57,6 +75,60 @@ export default function BookingListScreen({ navigation }) {
         type: 'success',
       });
     }, 3000);
+  };
+
+  // Generate hour and minute options for edit modal
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+  const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
+  // Update datetime string from date and time components for edit modal
+  const updateEditDateTimeString = (type) => {
+    const date = type === 'start' ? editStartDate : editEndDate;
+    const hour = type === 'start' ? editStartHour : editEndHour;
+    const minute = type === 'start' ? editStartMinute : editEndMinute;
+    
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    const dateTimeString = `${year}-${month}-${day} ${hour}:${minute}`;
+    
+    if (type === 'start') {
+      setEditStartDatetime(dateTimeString);
+      // Calculate duration immediately after setting start time
+      setTimeout(() => {
+        calculateEditDurationWithValues(dateTimeString, editEndDatetime);
+      }, 50);
+    } else {
+      setEditEndDatetime(dateTimeString);
+      // Calculate duration immediately after setting end time
+      setTimeout(() => {
+        calculateEditDurationWithValues(editStartDatetime, dateTimeString);
+      }, 50);
+    }
+  };
+
+  // Calculate duration with specific datetime values
+  const calculateEditDurationWithValues = (startDatetimeValue, endDatetimeValue) => {
+    if (startDatetimeValue && endDatetimeValue) {
+      try {
+        const start = new Date(startDatetimeValue);
+        const end = new Date(endDatetimeValue);
+        
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end > start) {
+          const diffInMs = end - start;
+          const diffInHours = diffInMs / (1000 * 60 * 60);
+          setEditDuration(diffInHours.toString());
+        }
+      } catch (error) {
+        console.log('Error calculating duration:', error);
+      }
+    }
+  };
+
+  // Calculate duration automatically for edit modal
+  const calculateEditDuration = () => {
+    calculateEditDurationWithValues(editStartDatetime, editEndDatetime);
   };
 
   // ตรวจสอบ authentication เมื่อ screen focus
@@ -246,9 +318,21 @@ export default function BookingListScreen({ navigation }) {
       return `${year}-${month}-${day} ${hours}:${minutes}`;
     };
     
+    // Set datetime strings
     setEditStartDatetime(formatForInput(startDate));
     setEditEndDatetime(formatForInput(endDate));
     setEditDuration(booking.duration_hours?.toString() || '');
+    
+    // Set date objects
+    setEditStartDate(startDate);
+    setEditEndDate(endDate);
+    
+    // Set time components
+    setEditStartHour(String(startDate.getHours()).padStart(2, '0'));
+    setEditStartMinute(String(startDate.getMinutes()).padStart(2, '0'));
+    setEditEndHour(String(endDate.getHours()).padStart(2, '0'));
+    setEditEndMinute(String(endDate.getMinutes()).padStart(2, '0'));
+    
     setEditModalVisible(true);
   };
 
@@ -259,10 +343,39 @@ export default function BookingListScreen({ navigation }) {
     setEditStartDatetime('');
     setEditEndDatetime('');
     setEditDuration('');
+    
+    // Reset date/time picker states
+    setEditStartDate(new Date());
+    setEditEndDate(new Date());
+    setEditStartHour('09');
+    setEditStartMinute('00');
+    setEditEndHour('11');
+    setEditEndMinute('00');
+    
+    // Close all dropdowns
+    setShowEditStartDatePicker(false);
+    setShowEditEndDatePicker(false);
+    setShowEditStartHourPicker(false);
+    setShowEditStartMinutePicker(false);
+    setShowEditEndHourPicker(false);
+    setShowEditEndMinutePicker(false);
   };
 
   // ฟังก์ชันอัพเดทการจอง
   const updateBooking = async () => {
+    // Debug: แสดงค่าที่จะส่งไป update
+    console.log('Update values:', {
+      editStartDatetime,
+      editEndDatetime,
+      editDuration,
+      editStartDate: editStartDate.toISOString(),
+      editEndDate: editEndDate.toISOString(),
+      editStartHour,
+      editStartMinute,
+      editEndHour,
+      editEndMinute
+    });
+
     if (!editStartDatetime || !editEndDatetime || !editDuration) {
       showNotification('กรุณากรอกข้อมูลให้ครบ', 'warning');
       return;
@@ -332,20 +445,6 @@ export default function BookingListScreen({ navigation }) {
       showNotification(`ไม่สามารถแก้ไขการจองได้: ${error.message}`, 'error');
     } finally {
       setUpdating(false);
-    }
-  };
-
-  // ฟังก์ชันสำหรับเติมเวลาปัจจุบัน
-  const setCurrentDateTimeForEdit = (type) => {
-    const now = new Date();
-    if (type === 'start') {
-      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      setEditStartDatetime(formatted);
-    } else {
-      now.setHours(now.getHours() + 2);
-      const formatted = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      setEditEndDatetime(formatted);
-      setEditDuration('2');
     }
   };
 
@@ -703,42 +802,129 @@ export default function BookingListScreen({ navigation }) {
             <Text style={styles.modalTitle}>แก้ไขเวลาการจอง</Text>
             <Text style={styles.modalSubtitle}>ห้อง {selectedBooking?.room_name}</Text>
             
-            <View style={styles.editSection}>
+            <View style={styles.dateTimeSection}>
               <Text style={styles.inputLabel}>วันที่และเวลาเริ่ม</Text>
-              <View style={styles.inputWithButtonRow}>
-                <TextInput
-                  style={[styles.editInput, { flex: 1, marginRight: 8 }]}
-                  placeholder="2024-09-10 14:00"
-                  value={editStartDatetime}
-                  onChangeText={setEditStartDatetime}
-                />
-                <TouchableOpacity 
-                  style={styles.quickFillButton} 
-                  onPress={() => setCurrentDateTimeForEdit('start')}
-                >
-                  <Text style={styles.quickFillText}>ตอนนี้</Text>
-                </TouchableOpacity>
+              
+              {/* Date Section - Vertical Layout */}
+              <View style={styles.dateSection}>
+                <View style={styles.dateColumn}>
+                  <Text style={styles.columnLabel}>วันที่เริ่ม</Text>
+                  {Platform.OS === 'web' ? (
+                    <input
+                      type="date"
+                      style={{
+                        width: '100%',
+                        padding: 12,
+                        fontSize: 16,
+                        border: '1px solid #ddd',
+                        borderRadius: 10,
+                        backgroundColor: '#fff'
+                      }}
+                      value={editStartDate.toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const newDate = new Date(e.target.value);
+                        if (!isNaN(newDate.getTime())) {
+                          setEditStartDate(newDate);
+                          updateEditDateTimeString('start');
+                        }
+                      }}
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.input, styles.dateButton]}
+                      onPress={() => setShowEditStartDatePicker(true)}
+                    >
+                      <Text style={styles.dateButtonText}>
+                        {editStartDate.toLocaleDateString('th-TH')}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                <View style={styles.dateColumn}>
+                  <Text style={styles.columnLabel}>วันที่สิ้นสุด</Text>
+                  {Platform.OS === 'web' ? (
+                    <input
+                      type="date"
+                      style={{
+                        width: '100%',
+                        padding: 12,
+                        fontSize: 16,
+                        border: '1px solid #ddd',
+                        borderRadius: 10,
+                        backgroundColor: '#fff'
+                      }}
+                      value={editEndDate.toISOString().split('T')[0]}
+                      onChange={(e) => {
+                        const newDate = new Date(e.target.value);
+                        if (!isNaN(newDate.getTime())) {
+                          setEditEndDate(newDate);
+                          updateEditDateTimeString('end');
+                        }
+                      }}
+                    />
+                  ) : (
+                    <TouchableOpacity 
+                      style={[styles.input, styles.dateButton]}
+                      onPress={() => setShowEditEndDatePicker(true)}
+                    >
+                      <Text style={styles.dateButtonText}>
+                        {editEndDate.toLocaleDateString('th-TH')}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-              <Text style={styles.helpText}>รูปแบบ: YYYY-MM-DD HH:MM</Text>
-            </View>
-            
-            <View style={styles.editSection}>
-              <Text style={styles.inputLabel}>วันที่และเวลาสิ้นสุด</Text>
-              <View style={styles.inputWithButtonRow}>
-                <TextInput
-                  style={[styles.editInput, { flex: 1, marginRight: 8 }]}
-                  placeholder="2024-09-10 17:00"
-                  value={editEndDatetime}
-                  onChangeText={setEditEndDatetime}
-                />
-                <TouchableOpacity 
-                  style={styles.quickFillButton} 
-                  onPress={() => setCurrentDateTimeForEdit('end')}
-                >
-                  <Text style={styles.quickFillText}>+2ชม</Text>
-                </TouchableOpacity>
+
+              {/* Time Row - Start and End Time */}
+              <View style={styles.timeSection}>
+                <Text style={styles.sectionLabel}>เวลา</Text>
+                <View style={styles.timeRow}>
+                  {/* Start Time */}
+                  <View style={styles.timeColumn}>
+                    <Text style={styles.columnLabel}>เวลาเริ่ม</Text>
+                    <View style={styles.timePickerRow}>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton}
+                        onPress={() => setShowEditStartHourPicker(!showEditStartHourPicker)}
+                      >
+                        <Text style={styles.timePickerText}>{editStartHour}</Text>
+                        <Text style={styles.dropdownIcon}>▼</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.timeSeparator}>:</Text>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton}
+                        onPress={() => setShowEditStartMinutePicker(!showEditStartMinutePicker)}
+                      >
+                        <Text style={styles.timePickerText}>{editStartMinute}</Text>
+                        <Text style={styles.dropdownIcon}>▼</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* End Time */}
+                  <View style={styles.timeColumn}>
+                    <Text style={styles.columnLabel}>เวลาสิ้นสุด</Text>
+                    <View style={styles.timePickerRow}>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton}
+                        onPress={() => setShowEditEndHourPicker(!showEditEndHourPicker)}
+                      >
+                        <Text style={styles.timePickerText}>{editEndHour}</Text>
+                        <Text style={styles.dropdownIcon}>▼</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.timeSeparator}>:</Text>
+                      <TouchableOpacity 
+                        style={styles.timePickerButton}
+                        onPress={() => setShowEditEndMinutePicker(!showEditEndMinutePicker)}
+                      >
+                        <Text style={styles.timePickerText}>{editEndMinute}</Text>
+                        <Text style={styles.dropdownIcon}>▼</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
               </View>
-              <Text style={styles.helpText}>รูปแบบ: YYYY-MM-DD HH:MM</Text>
             </View>
             
             <View style={styles.editSection}>
@@ -749,7 +935,9 @@ export default function BookingListScreen({ navigation }) {
                 value={editDuration}
                 onChangeText={setEditDuration}
                 keyboardType="numeric"
+                editable={false}
               />
+              <Text style={styles.helpText}>ระยะเวลาจะถูกคำนวณอัตโนมัติ</Text>
             </View>
             
             <View style={styles.modalButtonsContainer}>
@@ -770,6 +958,131 @@ export default function BookingListScreen({ navigation }) {
               >
                 <Text style={styles.cancelButtonText}>❌ ยกเลิก</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Time Picker Dropdowns for Edit Modal - Changed to Modal */}
+      <Modal visible={showEditStartHourPicker} transparent animationType="fade">
+        <View style={styles.dropdownModalOverlay}>
+          <View style={styles.dropdownContainer}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownTitle}>เลือกชั่วโมงเริ่ม</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowEditStartHourPicker(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dropdownGrid}>
+              {hours.map((hour) => (
+                <TouchableOpacity
+                  key={hour}
+                  style={[styles.dropdownItem, editStartHour === hour && styles.dropdownItemSelected]}
+                  onPress={() => {
+                    setEditStartHour(hour);
+                    setShowEditStartHourPicker(false);
+                    updateEditDateTimeString('start');
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, editStartHour === hour && styles.dropdownItemTextSelected]}>{hour}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showEditStartMinutePicker} transparent animationType="fade">
+        <View style={styles.dropdownModalOverlay}>
+          <View style={styles.dropdownContainer}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownTitle}>เลือกนาทีเริ่ม</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowEditStartMinutePicker(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dropdownGrid}>
+              {minutes.filter((_, index) => index % 5 === 0).map((minute) => (
+                <TouchableOpacity
+                  key={minute}
+                  style={[styles.dropdownItem, editStartMinute === minute && styles.dropdownItemSelected]}
+                  onPress={() => {
+                    setEditStartMinute(minute);
+                    setShowEditStartMinutePicker(false);
+                    updateEditDateTimeString('start');
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, editStartMinute === minute && styles.dropdownItemTextSelected]}>{minute}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showEditEndHourPicker} transparent animationType="fade">
+        <View style={styles.dropdownModalOverlay}>
+          <View style={styles.dropdownContainer}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownTitle}>เลือกชั่วโมงสิ้นสุด</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowEditEndHourPicker(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dropdownGrid}>
+              {hours.map((hour) => (
+                <TouchableOpacity
+                  key={hour}
+                  style={[styles.dropdownItem, editEndHour === hour && styles.dropdownItemSelected]}
+                  onPress={() => {
+                    setEditEndHour(hour);
+                    setShowEditEndHourPicker(false);
+                    updateEditDateTimeString('end');
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, editEndHour === hour && styles.dropdownItemTextSelected]}>{hour}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showEditEndMinutePicker} transparent animationType="fade">
+        <View style={styles.dropdownModalOverlay}>
+          <View style={styles.dropdownContainer}>
+            <View style={styles.dropdownHeader}>
+              <Text style={styles.dropdownTitle}>เลือกนาทีสิ้นสุด</Text>
+              <TouchableOpacity 
+                style={styles.closeButton}
+                onPress={() => setShowEditEndMinutePicker(false)}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.dropdownGrid}>
+              {minutes.filter((_, index) => index % 5 === 0).map((minute) => (
+                <TouchableOpacity
+                  key={minute}
+                  style={[styles.dropdownItem, editEndMinute === minute && styles.dropdownItemSelected]}
+                  onPress={() => {
+                    setEditEndMinute(minute);
+                    setShowEditEndMinutePicker(false);
+                    updateEditDateTimeString('end');
+                  }}
+                >
+                  <Text style={[styles.dropdownItemText, editEndMinute === minute && styles.dropdownItemTextSelected]}>{minute}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         </View>
@@ -1078,11 +1391,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
-    width: '90%',
+    width: 320,
     backgroundColor: '#fff',
-    borderRadius: 15,
+    borderRadius: 12,
     padding: 20,
-    maxHeight: '80%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
   },
   modalTitle: {
     fontSize: 20,
@@ -1294,5 +1614,182 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
     textAlign: 'center',
+  },
+  // Date/Time Picker Styles
+  dateTimeSection: {
+    marginVertical: 15,
+  },
+  dateSection: {
+    flexDirection: 'column',
+    marginBottom: 15,
+    gap: 15,
+  },
+  dateColumn: {
+    flex: 1,
+  },
+  columnLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  dateButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 48,
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#2c3e50',
+  },
+  timeSection: {
+    marginTop: 10,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginBottom: 12,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 15,
+  },
+  timeColumn: {
+    flex: 1,
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    minWidth: 60,
+  },
+  timePickerText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2c3e50',
+    marginRight: 8,
+  },
+  dropdownIcon: {
+    fontSize: 12,
+    color: '#666',
+  },
+  timeSeparator: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginHorizontal: 10,
+  },
+  // Dropdown Styles
+  dropdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 99999,
+    elevation: 20,
+  },
+  dropdownModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    maxHeight: '80%',
+    width: '85%',
+    padding: 0,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 25,
+    zIndex: 100000,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  dropdownTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#2c3e50',
+  },
+  closeButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  dropdownGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 20,
+    justifyContent: 'space-between',
+  },
+  dropdownItem: {
+    width: '15%',
+    aspectRatio: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    marginBottom: 10,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#2c3e50',
+  },
+  dropdownItemTextSelected: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

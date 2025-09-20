@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Button, Modal, TextInput, StyleSheet, Alert, Platform, Animated, TouchableOpacity, Image, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Picker } from '@react-native-picker/picker';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import ImagePicker conditionally (not supported on web)
@@ -33,6 +32,7 @@ export default function ProfileScreen() {
   const [regFullname, setRegFullname] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regRole, setRegRole] = useState('student');
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
 
   // User profile state
   const [profile, setProfile] = useState(null);
@@ -976,17 +976,53 @@ export default function ProfileScreen() {
               keyboardType="email-address"
               autoCapitalize="none"
             />
-            <View style={styles.pickerContainer}>
-              <Text style={styles.pickerLabel}>บทบาท:</Text>
-              <Picker
-                selectedValue={regRole}
-                style={styles.picker}
-                onValueChange={(itemValue) => setRegRole(itemValue)}
-                mode="dropdown"
+            <View style={styles.customDropdownContainer}>
+              <Text style={styles.dropdownLabel}>บทบาท:</Text>
+              <TouchableOpacity 
+                style={styles.dropdownButton}
+                onPress={() => setShowRoleDropdown(!showRoleDropdown)}
               >
-                <Picker.Item label="นักเรียน" value="student" />
-                <Picker.Item label="อาจารย์" value="teacher" />
-              </Picker>
+                <Text style={styles.dropdownButtonText}>
+                  {regRole === 'student' ? 'นักเรียน' : 'อาจารย์'}
+                </Text>
+                <Ionicons 
+                  name={showRoleDropdown ? "chevron-up" : "chevron-down"} 
+                  size={20} 
+                  color="#666" 
+                />
+              </TouchableOpacity>
+              {showRoleDropdown && (
+                <View style={styles.dropdownMenu}>
+                  <TouchableOpacity 
+                    style={[styles.dropdownItem, regRole === 'student' && styles.selectedItem]}
+                    onPress={() => {
+                      setRegRole('student');
+                      setShowRoleDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, regRole === 'student' && styles.selectedItemText]}>
+                      นักเรียน
+                    </Text>
+                    {regRole === 'student' && (
+                      <Ionicons name="checkmark" size={18} color="#007AFF" />
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.dropdownItem, regRole === 'teacher' && styles.selectedItem]}
+                    onPress={() => {
+                      setRegRole('teacher');
+                      setShowRoleDropdown(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownItemText, regRole === 'teacher' && styles.selectedItemText]}>
+                      อาจารย์
+                    </Text>
+                    {regRole === 'teacher' && (
+                      <Ionicons name="checkmark" size={18} color="#007AFF" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
             <View style={styles.row}>
               <Button title="สมัครสมาชิก" onPress={handleRegister} />
@@ -1704,20 +1740,72 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 8,
   },
-  pickerContainer: {
+  customDropdownContainer: {
     marginBottom: 12,
+    position: 'relative',
+    zIndex: 1000,
   },
-  pickerLabel: {
+  dropdownLabel: {
     marginBottom: 8,
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#2c3e50',
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    minHeight: 48,
+  },
+  dropdownButtonText: {
     fontSize: 16,
     color: '#2c3e50',
   },
-  picker: {
-    ...Platform.select({
-      ios: { height: 120 },
-      android: { height: 40 },
-    }),
-    width: '100%',
+  dropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e1e5e9',
+    borderRadius: 12,
+    marginTop: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 1001,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+  },
+  selectedItem: {
+    backgroundColor: '#f0f8ff',
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    color: '#2c3e50',
+  },
+  selectedItemText: {
+    color: '#007AFF',
+    fontWeight: '500',
   },
   // Success Notification Styles
   successNotification: {
